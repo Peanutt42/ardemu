@@ -1,0 +1,10 @@
+[package]
+name = "ardemu_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+ardemu_asm_parse_macro = { path = "../ardemu_asm_parse_macro" }

@@ -1,5 +1,4 @@
 use std::num::ParseIntError;
-
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, Error)]
@@ -12,17 +11,26 @@ pub enum CpuError {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct AsmParseError {
-	line_number: usize,
 	error: AsmParseErrorType,
+	line_number: usize,
+	line: String,
 }
 impl AsmParseError {
-	pub fn new(line_number: usize, error: AsmParseErrorType) -> Self {
-		Self { line_number, error }
+	pub fn new(error: AsmParseErrorType, line_number: usize, line: String) -> Self {
+		Self {
+			error,
+			line_number,
+			line,
+		}
 	}
 }
 impl std::fmt::Debug for AsmParseError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "line {}: {}", self.line_number, self.error)
+		write!(
+			f,
+			"{} on line {}: '{}'",
+			self.error, self.line_number, self.line,
+		)
 	}
 }
 

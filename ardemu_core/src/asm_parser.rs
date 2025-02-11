@@ -1,7 +1,4 @@
-use crate::{
-	error::{AsmParseError, AsmParseErrorType},
-	Instruction,
-};
+use crate::{AsmParseError, AsmParseErrorType, Instruction};
 use std::collections::HashMap;
 
 /// removes comments (';')
@@ -130,7 +127,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 
 		let instruction =
 			parse_instruction(&mnemonic, &operands, &symbol_table, current_program_counter)
-				.map_err(|error| AsmParseError::new(line_number, error))?;
+				.map_err(|error| AsmParseError::new(error, line_number, line.clone()))?;
 
 		instructions.push(instruction);
 		current_program_counter += 1;
@@ -139,40 +136,26 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 	Ok(instructions)
 }
 
-#[macro_export]
-macro_rules! include_asm {
-	($file:literal) => {{
-		ardemu::parse_asm(include_str!($file)).expect(concat!("failed to parse asm file: ", $file))
-	}};
-}
-
-#[macro_export]
-macro_rules! include_asm_str {
-	($str:literal) => {{
-		ardemu::parse_asm($str).expect("failed to parse inline asm string")
-	}};
-}
-
 #[cfg(test)]
 mod tests {
-	use crate::{self as ardemu, Instruction};
+	use crate as ardemu_core;
+	use crate::Instruction;
+	use ardemu_asm_parse_macro::parse_asm;
 
 	#[test]
 	fn test_parse_asm() {
-		let asm = include_asm_str!(
-			r"
-	ldi r0, 0x0     ; r0 = LOW
-	ldi r1, 0x20    ; r1 = HIGH
-loop:
-	store r1, 0x25  ; turn LED on
-	store r0, 0x25  ; turn LED off
-	jmp loop
-			"
-		);
-
 		assert_eq!(
-			asm,
-			vec![
+			parse_asm!(
+				r"
+				ldi r0, 0x0     ; r0 = LOW
+				ldi r1, 0x20    ; r1 = HIGH
+			loop:
+				store r1, 0x25  ; turn LED on
+				store r0, 0x25  ; turn LED off
+				jmp loop
+			"
+			),
+			[
 				Instruction::Ldi { reg: 0, value: 0 },
 				Instruction::Ldi {
 					reg: 1,

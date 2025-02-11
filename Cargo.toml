@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["ardemu_gui"]
+members = ["ardemu_core", "ardemu_asm_parse_macro", "ardemu_gui"]
+
+[workspace.dependencies]
+thiserror = { version = "2.0" }
 
 [dependencies]
-thiserror = "2.0.11"
+ardemu_core = { path = "ardemu_core" }
+ardemu_asm_parse_macro = { path = "ardemu_asm_parse_macro" }

@@ -112,6 +112,25 @@ dependencies = [
 name = "ardemu"
 version = "0.1.0"
 dependencies = [
+ "ardemu_asm_parse_macro",
+ "ardemu_core",
+]
+
+[[package]]
+name = "ardemu_asm_parse_macro"
+version = "0.1.0"
+dependencies = [
+ "ardemu_core",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "ardemu_core"
+version = "0.1.0"
+dependencies = [
+ "ardemu_asm_parse_macro",
  "thiserror 2.0.11",
 ]
 
@@ -119,7 +138,7 @@ dependencies = [
 name = "ardemu_gui"
 version = "0.1.0"
 dependencies = [
- "ardemu",
+ "ardemu_core",
  "iced",
 ]
 

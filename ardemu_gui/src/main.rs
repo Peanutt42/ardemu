@@ -4,7 +4,7 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
-use ardemu::Cpu;
+use ardemu_core::{parse_asm, AsmParseError, Cpu, Instruction};
 use iced::{
 	alignment::Vertical,
 	time,
@@ -20,7 +20,7 @@ struct App {
 	simulate_cpu: bool,
 	simulation_frequency: u64,
 	asm_source_code_text_content: text_editor::Content,
-	asm_output: Result<Vec<ardemu::Instruction>, ardemu::AsmParseError>,
+	asm_output: Result<Vec<Instruction>, AsmParseError>,
 }
 
 impl Default for App {
@@ -31,7 +31,7 @@ impl Default for App {
 			simulate_cpu: false,
 			simulation_frequency: 10,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
-			asm_output: ardemu::parse_asm(&asm_source_code),
+			asm_output: parse_asm(&asm_source_code),
 		}
 	}
 }
@@ -92,7 +92,7 @@ impl App {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
 				if is_edit {
-					self.asm_output = ardemu::parse_asm(&self.asm_source_code_text_content.text());
+					self.asm_output = parse_asm(&self.asm_source_code_text_content.text());
 					self.cpu = Cpu::default();
 				}
 			}
