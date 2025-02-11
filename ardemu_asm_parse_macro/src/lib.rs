@@ -1,7 +1,21 @@
-use ardemu_core::{Instruction, Register};
+use ardemu_core::{Instruction, Register, RegisterOrImmediate};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, LitStr};
+
+fn quote_immediate_or_register(
+	immediate_or_register: RegisterOrImmediate,
+) -> proc_macro2::TokenStream {
+	match immediate_or_register {
+		RegisterOrImmediate::Register(register) => {
+			let register = quote_register(register);
+			quote! { ardemu_core::RegisterOrImmediate::Register(#register) }
+		}
+		RegisterOrImmediate::Immediate(immediate) => {
+			quote! { ardemu_core::RegisterOrImmediate::Immediate(#immediate) }
+		}
+	}
+}
 
 fn quote_register(register: Register) -> proc_macro2::TokenStream {
 	match register {
@@ -42,29 +56,27 @@ fn quote_register(register: Register) -> proc_macro2::TokenStream {
 
 fn quote_instruction(instruction: Instruction) -> proc_macro2::TokenStream {
 	match instruction {
-		Instruction::Nop => quote! {
-			ardemu_core::Instruction::Nop
-		},
-		Instruction::Ldi { reg, value } => {
+		Instruction::Move { reg, value } => {
 			let reg = quote_register(reg);
+			let value = quote_immediate_or_register(value);
 			quote! {
-				ardemu_core::Instruction::Ldi { reg: #reg, value: #value }
+				ardemu_core::Instruction::Move { reg: #reg, value: #value }
 			}
 		}
-		Instruction::Add { rd, rs } => {
-			let rd = quote_register(rd);
-			let rs = quote_register(rs);
+		Instruction::Add { reg, value } => {
+			let reg = quote_register(reg);
+			let value = quote_immediate_or_register(value);
 			quote! {
-				ardemu_core::Instruction::Add { rd: #rd, rs: #rs }
+				ardemu_core::Instruction::Add { reg: #reg, value: #value }
 			}
 		}
 		Instruction::Jmp { offset } => quote! {
 			ardemu_core::Instruction::Jmp { offset: #offset }
 		},
-		Instruction::Store { reg, addr } => {
-			let reg = quote_register(reg);
+		Instruction::Store { value, addr } => {
+			let value = quote_immediate_or_register(value);
 			quote! {
-				ardemu_core::Instruction::Store { reg: #reg, addr: #addr }
+				ardemu_core::Instruction::Store { value: #value, addr: #addr }
 			}
 		}
 	}

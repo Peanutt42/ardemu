@@ -1,5 +1,5 @@
-    ldi r0, 0x0     ; r0 = LOW
-    ldi r1, 0x20    ; r1 = HIGH
+    move r0, 0x0     ; r0 = LOW
+    move r1, 0x20    ; r1 = HIGH
     store r1, 0x24  ; addr 0x24 = DDRB, if 0x20 is set, used as OUTPUT
 
 loop:

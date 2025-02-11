@@ -1,27 +1,33 @@
-use crate::Register;
+use crate::{register::RegisterOrImmediate, Register};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Instruction {
-	// Move immediate value to register
-	Ldi { reg: Register, value: u8 },
-	// Add two registers (store result in first)
-	Add { rd: Register, rs: Register },
-	// Jump to relative address
+	/// moves value into register
+	Move {
+		reg: Register,
+		value: RegisterOrImmediate,
+	},
+	/// jumps relative to current instruction
 	Jmp { offset: i32 },
-	// Stores value from register to address
-	Store { reg: Register, addr: usize },
-	// No operation
-	Nop,
+	/// add value to register
+	Add {
+		reg: Register,
+		value: RegisterOrImmediate,
+	},
+	/// store value in memory at address
+	Store {
+		value: RegisterOrImmediate,
+		addr: usize,
+	},
 }
 
 impl std::fmt::Debug for Instruction {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match *self {
-			Instruction::Ldi { reg, value } => write!(f, "LDI {reg}, {value:#04x}"),
-			Instruction::Add { rd, rs } => write!(f, "ADD {rd}, {rs}"),
+			Instruction::Move { reg, value } => write!(f, "MOVE {reg}, {value}"),
+			Instruction::Add { reg, value } => write!(f, "ADD {reg}, {value}"),
 			Instruction::Jmp { offset } => write!(f, "JMP {offset}"),
-			Instruction::Store { reg, addr } => write!(f, "STORE {reg}, {addr:#04x}"),
-			Instruction::Nop => write!(f, "NOP"),
+			Instruction::Store { value, addr } => write!(f, "STORE {value}, {addr:#04x}"),
 		}
 	}
 }

@@ -1,4 +1,38 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegisterOrImmediate {
+	Register(Register),
+	Immediate(u8),
+}
+
+impl RegisterOrImmediate {
+	pub fn immediate_or_else(&self, else_callback: impl FnOnce(Register) -> u8) -> u8 {
+		match *self {
+			Self::Immediate(immediate) => immediate,
+			Self::Register(reg) => else_callback(reg),
+		}
+	}
+}
+
+impl From<Register> for RegisterOrImmediate {
+	fn from(register: Register) -> Self {
+		Self::Register(register)
+	}
+}
+impl From<u8> for RegisterOrImmediate {
+	fn from(immediate: u8) -> Self {
+		Self::Immediate(immediate)
+	}
+}
+impl std::fmt::Display for RegisterOrImmediate {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match *self {
+			RegisterOrImmediate::Register(r) => write!(f, "{}", r),
+			RegisterOrImmediate::Immediate(i) => write!(f, "{}", i),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Register {
 	R0,
 	R1,

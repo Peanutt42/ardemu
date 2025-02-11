@@ -55,25 +55,23 @@ impl Cpu {
 
 	pub fn execute(&mut self, instruction: Instruction) -> Result<(), CpuError> {
 		match instruction {
-			Instruction::Ldi { reg, value } => {
+			Instruction::Move { reg, value } => {
+				let value = value.immediate_or_else(|reg| self.get_register_value(reg));
 				self.set_register_value(reg, value);
 				self.program_counter += 1;
 			}
-			Instruction::Add { rd, rs } => {
-				let rd_value = self.get_register_value(rd);
-				let rs_value = self.get_register_value(rs);
-				self.set_register_value(rd, rd_value.wrapping_add(rs_value));
+			Instruction::Add { reg, value } => {
+				let reg_value = self.get_register_value(reg);
+				let other_value = value.immediate_or_else(|reg| self.get_register_value(reg));
+				self.set_register_value(reg, reg_value.wrapping_add(other_value));
 				self.program_counter += 1;
 			}
 			Instruction::Jmp { offset } => {
 				self.program_counter = (self.program_counter as i32 + offset) as usize;
 			}
-			Instruction::Store { reg, addr } => {
-				let register_value = self.get_register_value(reg);
-				self.set_ram(addr, register_value)?;
-				self.program_counter += 1;
-			}
-			Instruction::Nop => {
+			Instruction::Store { value, addr } => {
+				let value = value.immediate_or_else(|reg| self.get_register_value(reg));
+				self.set_ram(addr, value)?;
 				self.program_counter += 1;
 			}
 		}
@@ -94,48 +92,44 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_execute_ldi() {
+	fn test_execute_move() {
 		let mut cpu = Cpu::default();
-		cpu.execute(Instruction::Ldi {
+		cpu.execute(Instruction::Move {
 			reg: Register::R0,
-			value: 0x42,
+			value: 42.into(),
 		})
 		.unwrap();
-		assert_eq!(cpu.registers[0], 0x42);
+		assert_eq!(cpu.registers[0], 42);
 	}
 
 	#[test]
 	fn test_execute_add() {
 		let mut cpu = Cpu::default();
-		cpu.registers[0] = 0x42;
-		cpu.registers[1] = 0x23;
+		cpu.registers[0] = 42;
+		cpu.registers[1] = 23;
 		cpu.execute(Instruction::Add {
-			rd: Register::R0,
-			rs: Register::R1,
+			reg: Register::R0,
+			value: Register::R1.into(),
 		})
 		.unwrap();
-		assert_eq!(cpu.registers[0], 0x65);
+		assert_eq!(cpu.registers[0], 42 + 23);
 	}
 
 	#[test]
 	fn test_execute_jmp() {
 		let mut cpu = Cpu::default();
-		cpu.registers[0] = 0x42;
-		cpu.registers[1] = 0x23;
-		cpu.execute(Instruction::Jmp { offset: 0x42 }).unwrap();
-		assert_eq!(cpu.program_counter, 0x42);
+		cpu.execute(Instruction::Jmp { offset: 42 }).unwrap();
+		assert_eq!(cpu.program_counter, 42);
 	}
 
 	#[test]
 	fn test_execute_store() {
 		let mut cpu = Cpu::default();
-		cpu.registers[0] = 0x42;
-		cpu.registers[1] = 0x23;
 		cpu.execute(Instruction::Store {
-			reg: Register::R0,
-			addr: 0x42,
+			value: 42.into(),
+			addr: 42,
 		})
 		.unwrap();
-		assert_eq!(cpu.sram[0x42], 0x42);
+		assert_eq!(cpu.sram[42], 42);
 	}
 }

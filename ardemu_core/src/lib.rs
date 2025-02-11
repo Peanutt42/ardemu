@@ -14,7 +14,7 @@ mod instruction;
 pub use instruction::Instruction;
 
 mod register;
-pub use register::Register;
+pub use register::{Register, RegisterOrImmediate};
 
 mod asm_parser;
 pub use asm_parser::parse_asm;
