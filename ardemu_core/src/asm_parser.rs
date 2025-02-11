@@ -42,8 +42,9 @@ fn parse_number(s: &str) -> Result<u32, AsmParseErrorType> {
 fn parse_register(s: &str) -> Result<Register, AsmParseErrorType> {
 	match s.strip_prefix("r") {
 		Some(s) => {
-			let number =
-				u8::from_str_radix(s, 2).map_err(|source| AsmParseErrorType::InvalidNumber {
+			let number = s
+				.parse::<u8>()
+				.map_err(|source| AsmParseErrorType::InvalidNumber {
 					string: s.to_string(),
 					source,
 				})?;
@@ -165,11 +166,14 @@ mod tests {
 		assert_eq!(
 			parse_asm!(
 				r"
-				move r0, 0x0     ; r0 = LOW
-				move r1, 0x20    ; r1 = HIGH
+				; leading comment
+				move r0, 0 ; comment
+				move r1, 1
+				move r2, 2
+				; another comment
 			loop:
-				store r1, 0x25  ; turn LED on
-				store r0, 0x25  ; turn LED off
+				store r0, 0x50
+				store r1, 0x51
 				jmp loop
 			"
 			),
@@ -180,15 +184,19 @@ mod tests {
 				},
 				Instruction::Move {
 					reg: Register::R1,
-					value: 0x20.into()
+					value: 1.into()
 				},
-				Instruction::Store {
-					value: Register::R1.into(),
-					addr: 0x25
+				Instruction::Move {
+					reg: Register::R2,
+					value: 2.into()
 				},
 				Instruction::Store {
 					value: Register::R0.into(),
-					addr: 0x25
+					addr: 0x50
+				},
+				Instruction::Store {
+					value: Register::R1.into(),
+					addr: 0x51
 				},
 				Instruction::Jmp { offset: -2 },
 			]
