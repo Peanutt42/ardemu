@@ -1,4 +1,4 @@
-use crate::{AsmParseError, AsmParseErrorType, Instruction};
+use crate::{AsmParseError, AsmParseErrorType, Instruction, Register};
 use std::collections::HashMap;
 
 /// removes comments (';')
@@ -42,6 +42,11 @@ fn parse_number(s: &str) -> Result<u32, AsmParseErrorType> {
 	}
 }
 
+fn parse_register(s: &str) -> Result<Register, AsmParseErrorType> {
+	let number = parse_number(s)? as u8;
+	Register::try_from(number).map_err(|_| AsmParseErrorType::InvalidRegister(s.to_string()))
+}
+
 fn split_mnemonic_operands(line: &str) -> (String, Vec<String>) {
 	let parts: Vec<&str> = line.split_whitespace().collect();
 	if parts.is_empty() {
@@ -65,13 +70,13 @@ fn parse_instruction(
 ) -> Result<Instruction, AsmParseErrorType> {
 	match mnemonic.to_uppercase().as_str() {
 		"LDI" => {
-			let reg = parse_number(&operands[0][1..])? as usize;
+			let reg = parse_register(&operands[0][1..])?;
 			let value = parse_number(&operands[1])? as u8;
 			Ok(Instruction::Ldi { reg, value })
 		}
 		"ADD" => {
-			let rd = parse_number(&operands[0])? as usize;
-			let rs = parse_number(&operands[1])? as usize;
+			let rd = parse_register(&operands[0])?;
+			let rs = parse_register(&operands[1])?;
 			Ok(Instruction::Add { rd, rs })
 		}
 		"JMP" => {
@@ -83,12 +88,12 @@ fn parse_instruction(
 			Ok(Instruction::Jmp { offset })
 		}
 		"STORE" => {
-			let reg = parse_number(&operands[0])? as usize;
+			let reg = parse_register(&operands[0])?;
 			let addr = parse_number(&operands[1])? as usize;
 			Ok(Instruction::Store { reg, addr })
 		}
 		"NOP" => Ok(Instruction::Nop),
-		_ => Err(AsmParseErrorType::InvalidInstruction),
+		_ => Err(AsmParseErrorType::InvalidInstruction(mnemonic.to_string())),
 	}
 }
 
@@ -127,7 +132,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 
 		let instruction =
 			parse_instruction(&mnemonic, &operands, &symbol_table, current_program_counter)
-				.map_err(|error| AsmParseError::new(error, line_number, line.clone()))?;
+				.map_err(|error| AsmParseError::new(error, line_number))?;
 
 		instructions.push(instruction);
 		current_program_counter += 1;
@@ -139,7 +144,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 #[cfg(test)]
 mod tests {
 	use crate as ardemu_core;
-	use crate::Instruction;
+	use crate::{Instruction, Register};
 	use ardemu_asm_parse_macro::parse_asm;
 
 	#[test]
@@ -156,13 +161,22 @@ mod tests {
 			"
 			),
 			[
-				Instruction::Ldi { reg: 0, value: 0 },
 				Instruction::Ldi {
-					reg: 1,
+					reg: Register::R0,
+					value: 0
+				},
+				Instruction::Ldi {
+					reg: Register::R1,
 					value: 0x20
 				},
-				Instruction::Store { reg: 1, addr: 0x25 },
-				Instruction::Store { reg: 0, addr: 0x25 },
+				Instruction::Store {
+					reg: Register::R1,
+					addr: 0x25
+				},
+				Instruction::Store {
+					reg: Register::R0,
+					addr: 0x25
+				},
 				Instruction::Jmp { offset: -2 },
 			]
 		);
