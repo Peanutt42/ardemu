@@ -26,16 +26,24 @@ fn quote_instruction(instruction: Instruction) -> proc_macro2::TokenStream {
 #[proc_macro]
 pub fn parse_asm(input: TokenStream) -> TokenStream {
 	let asm_input = parse_macro_input!(input as LitStr).value();
-	let instrucitons =
-		ardemu_core::parse_asm(&asm_input).unwrap_or_else(|e| panic!("ASM parse error: {e:?}"));
+	let expanded = match ardemu_core::parse_asm(&asm_input) {
+		Ok(instructions) => {
+			let instruction_tokens = instructions
+				.into_iter()
+				.map(quote_instruction)
+				.collect::<Vec<_>>();
 
-	let instruction_tokens = instrucitons
-		.into_iter()
-		.map(quote_instruction)
-		.collect::<Vec<_>>();
+			quote! {
+				[ #(#instruction_tokens),* ]
+			}
+		}
+		Err(e) => {
+			let compile_error_msg = format!("ASM parse error: {e:?}");
 
-	let expanded = quote! {
-		[ #(#instruction_tokens),* ]
+			quote! {
+				compile_error!(#compile_error_msg)
+			}
+		}
 	};
 
 	expanded.into()
@@ -50,23 +58,40 @@ pub fn include_asm(input: TokenStream) -> TokenStream {
 	let asm_filepath = current_dir.join(asm_filepath);
 	let asm_filepath_str = asm_filepath.to_str().unwrap();
 
-	let asm_file_contents = std::fs::read_to_string(&asm_filepath)
-		.unwrap_or_else(|e| panic!("Failed to read ASM file in '{asm_filepath_str}': {e:?}"));
+	let expanded = match std::fs::read_to_string(&asm_filepath) {
+		Ok(asm_file_contents) => {
+			match ardemu_core::parse_asm(&asm_file_contents) {
+				Ok(instructions) => {
+					let instruction_tokens = instructions
+						.into_iter()
+						.map(quote_instruction)
+						.collect::<Vec<_>>();
 
-	let instrucitons = ardemu_core::parse_asm(&asm_file_contents)
-		.unwrap_or_else(|e| panic!("ASM parse error in file '{asm_filepath_str}': {e:?}"));
+					quote! {
+						{
+							/// this will make the compiler recompile when the file changes
+							const _RECOMPILE_IF_CHANGED_HANDLE: &str = include_str!(#asm_filepath_str);
 
-	let instruction_tokens = instrucitons
-		.into_iter()
-		.map(quote_instruction)
-		.collect::<Vec<_>>();
+							[ #(#instruction_tokens),* ]
+						}
+					}
+				}
+				Err(e) => {
+					let compile_error_msg =
+						format!("ASM parse error in file '{asm_filepath_str}': {e:?}");
 
-	let expanded = quote! {
-		{
-			/// this will make the compiler recompile when the file changes
-			const _RECOMPILE_IF_CHANGED_HANDLE: &str = include_str!(#asm_filepath_str);
-
-			[ #(#instruction_tokens),* ]
+					quote! {
+						compile_error!(#compile_error_msg)
+					}
+				}
+			}
+		}
+		Err(e) => {
+			let compile_error_msg =
+				format!("Failed to read ASM file in '{asm_filepath_str}': {e:?}");
+			quote! {
+				compile_error!(#compile_error_msg)
+			}
 		}
 	};
 
