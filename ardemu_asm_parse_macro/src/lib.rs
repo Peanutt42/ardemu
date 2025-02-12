@@ -8,12 +8,15 @@ pub fn parse_asm(input: TokenStream) -> TokenStream {
 	let asm_input = parse_macro_input!(input as LitStr).value();
 	let expanded = match ardemu_core::parse_asm(&asm_input) {
 		Ok(instructions) => {
-			let instruction_tokens = instructions.into_iter().collect::<Vec<_>>().to_tokens();
+			let instruction_tokens = instructions
+				.into_iter()
+				.map(|instr| instr.to_tokens())
+				.collect::<Vec<_>>();
 			quote! {
 				{
 					use ardemu_core::{Instruction, Register, RegisterOrImmediate};
 
-					#instruction_tokens
+					[ #(#instruction_tokens),* ]
 				}
 			}
 		}
@@ -42,8 +45,10 @@ pub fn include_asm(input: TokenStream) -> TokenStream {
 		Ok(asm_file_contents) => {
 			match ardemu_core::parse_asm(&asm_file_contents) {
 				Ok(instructions) => {
-					let instruction_tokens =
-						instructions.into_iter().collect::<Vec<_>>().to_tokens();
+					let instruction_tokens = instructions
+						.into_iter()
+						.map(|instr| instr.to_tokens())
+						.collect::<Vec<_>>();
 
 					quote! {
 						{
@@ -52,7 +57,7 @@ pub fn include_asm(input: TokenStream) -> TokenStream {
 							/// this will make the compiler recompile when the file changes
 							const _RECOMPILE_IF_CHANGED_HANDLE: &str = include_str!(#asm_filepath_str);
 
-							#instruction_tokens
+							[ #(#instruction_tokens),* ]
 						}
 					}
 				}
