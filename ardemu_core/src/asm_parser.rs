@@ -64,7 +64,7 @@ fn parse_immediate_or_register(s: &str) -> Result<RegisterOrImmediate, AsmParseE
 	}
 }
 
-fn split_mnemonic_operands(line: &str) -> (String, Vec<String>) {
+fn split_mnemonic_operands(line: &str) -> (String, Vec<&str>) {
 	let parts: Vec<&str> = line.split_whitespace().collect();
 	if parts.is_empty() {
 		return (String::new(), Vec::new());
@@ -73,40 +73,56 @@ fn split_mnemonic_operands(line: &str) -> (String, Vec<String>) {
 	let operands = parts[1..]
 		.iter()
 		.flat_map(|s| s.split(','))
-		.map(|s| s.trim().to_string())
+		.map(|s| s.trim())
 		.filter(|s| !s.is_empty())
 		.collect();
 	(mnemonic, operands)
 }
 
+fn consume_operands<'a, 'b, const N: usize>(
+	operands: &'a [&'b str],
+) -> Result<&'a [&'b str; N], AsmParseErrorType> {
+	match operands.try_into() {
+		Ok(operands) => Ok(operands),
+		Err(_) => Err(AsmParseErrorType::InvalidArgumentCount {
+			expected_count: N,
+			actual_count: operands.len(),
+		}),
+	}
+}
+
 fn parse_instruction(
 	mnemonic: &str,
-	operands: &[String],
+	operands: &[&str],
 	symbol_table: &HashMap<String, usize>,
 	current_program_counter: usize,
 ) -> Result<Instruction, AsmParseErrorType> {
 	match mnemonic.to_uppercase().as_str() {
 		"MOVE" => {
-			let reg = parse_register(&operands[0])?;
-			let value = parse_immediate_or_register(&operands[1])?;
+			let operands = consume_operands::<2>(operands)?;
+			let reg = parse_register(operands[0])?;
+			let value = parse_immediate_or_register(operands[1])?;
 			Ok(Instruction::Move { reg, value })
 		}
 		"ADD" => {
-			let reg = parse_register(&operands[0])?;
-			let value = parse_immediate_or_register(&operands[1])?;
+			let operands = consume_operands::<2>(operands)?;
+			let reg = parse_register(operands[0])?;
+			let value = parse_immediate_or_register(operands[1])?;
 			Ok(Instruction::Add { reg, value })
 		}
 		"JMP" => {
+			let operands = consume_operands::<1>(operands)?;
 			let target = symbol_table
-				.get(&operands[0])
+				.get(operands[0])
 				.copied()
-				.ok_or(AsmParseErrorType::UndefinedLabel(operands[0].clone()))?;
+				.ok_or(AsmParseErrorType::UndefinedLabel(operands[0].to_string()))?;
 			let offset = target as i32 - current_program_counter as i32;
 			Ok(Instruction::Jmp { offset })
 		}
 		"STORE" => {
-			let value = parse_immediate_or_register(&operands[0])?;
-			let addr = parse_number(&operands[1])?;
+			let operands = consume_operands::<2>(operands)?;
+			let value = parse_immediate_or_register(operands[0])?;
+			let addr = parse_number(operands[1])?;
 			Ok(Instruction::Store { value, addr })
 		}
 		_ => Err(AsmParseErrorType::InvalidInstruction(mnemonic.to_string())),
@@ -159,7 +175,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 
 #[cfg(test)]
 mod tests {
-	use crate as ardemu_core;
+	use crate::{self as ardemu_core, parse_asm, AsmParseError, AsmParseErrorType};
 	use crate::{Instruction, R0, R1, R2};
 	use ardemu_asm_parse_macro::parse_asm;
 
@@ -202,6 +218,40 @@ mod tests {
 				},
 				Instruction::Jmp { offset: -2 },
 			]
+		);
+	}
+
+	#[test]
+	fn test_parse_invalid_argument_count() {
+		assert_eq!(
+			parse_asm("move r0"),
+			Err(AsmParseError::new(
+				AsmParseErrorType::InvalidArgumentCount {
+					expected_count: 2,
+					actual_count: 1,
+				},
+				1
+			))
+		);
+		assert_eq!(
+			parse_asm("jmp "),
+			Err(AsmParseError::new(
+				AsmParseErrorType::InvalidArgumentCount {
+					expected_count: 1,
+					actual_count: 0,
+				},
+				1
+			))
+		);
+		assert_eq!(
+			parse_asm("store r0 0x0 0x1"),
+			Err(AsmParseError::new(
+				AsmParseErrorType::InvalidArgumentCount {
+					expected_count: 2,
+					actual_count: 3,
+				},
+				1
+			))
 		);
 	}
 }

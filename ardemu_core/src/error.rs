@@ -25,6 +25,11 @@ impl std::fmt::Debug for AsmParseError {
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum AsmParseErrorType {
+	#[error("invalid argument count, expected {expected_count}, got {actual_count}")]
+	InvalidArgumentCount {
+		expected_count: usize,
+		actual_count: usize,
+	},
 	#[error("invalid instruction: '{0}'")]
 	InvalidInstruction(String),
 	#[error("invalid register: '{0}', must be between r0 and r31!")]
