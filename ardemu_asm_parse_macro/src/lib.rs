@@ -1,99 +1,20 @@
-use ardemu_core::{Instruction, Register, RegisterOrImmediate};
 use proc_macro::TokenStream;
 use quote::quote;
+use self_rust_tokenize::SelfRustTokenize;
 use syn::{parse_macro_input, LitStr};
-
-fn quote_immediate_or_register(
-	immediate_or_register: RegisterOrImmediate,
-) -> proc_macro2::TokenStream {
-	match immediate_or_register {
-		RegisterOrImmediate::Register(register) => {
-			let register = quote_register(register);
-			quote! { ardemu_core::RegisterOrImmediate::Register(#register) }
-		}
-		RegisterOrImmediate::Immediate(immediate) => {
-			quote! { ardemu_core::RegisterOrImmediate::Immediate(#immediate) }
-		}
-	}
-}
-
-fn quote_register(register: Register) -> proc_macro2::TokenStream {
-	match register {
-		Register::R0 => quote! { ardemu_core::Register::R0 },
-		Register::R1 => quote! { ardemu_core::Register::R1 },
-		Register::R2 => quote! { ardemu_core::Register::R2 },
-		Register::R3 => quote! { ardemu_core::Register::R3 },
-		Register::R4 => quote! { ardemu_core::Register::R4 },
-		Register::R5 => quote! { ardemu_core::Register::R5 },
-		Register::R6 => quote! { ardemu_core::Register::R6 },
-		Register::R7 => quote! { ardemu_core::Register::R7 },
-		Register::R8 => quote! { ardemu_core::Register::R8 },
-		Register::R9 => quote! { ardemu_core::Register::R9 },
-		Register::R10 => quote! { ardemu_core::Register::R10 },
-		Register::R11 => quote! { ardemu_core::Register::R11 },
-		Register::R12 => quote! { ardemu_core::Register::R12 },
-		Register::R13 => quote! { ardemu_core::Register::R13 },
-		Register::R14 => quote! { ardemu_core::Register::R14 },
-		Register::R15 => quote! { ardemu_core::Register::R15 },
-		Register::R16 => quote! { ardemu_core::Register::R16 },
-		Register::R17 => quote! { ardemu_core::Register::R17 },
-		Register::R18 => quote! { ardemu_core::Register::R18 },
-		Register::R19 => quote! { ardemu_core::Register::R19 },
-		Register::R20 => quote! { ardemu_core::Register::R20 },
-		Register::R21 => quote! { ardemu_core::Register::R21 },
-		Register::R22 => quote! { ardemu_core::Register::R22 },
-		Register::R23 => quote! { ardemu_core::Register::R23 },
-		Register::R24 => quote! { ardemu_core::Register::R24 },
-		Register::R25 => quote! { ardemu_core::Register::R25 },
-		Register::R26 => quote! { ardemu_core::Register::R26 },
-		Register::R27 => quote! { ardemu_core::Register::R27 },
-		Register::R28 => quote! { ardemu_core::Register::R28 },
-		Register::R29 => quote! { ardemu_core::Register::R29 },
-		Register::R30 => quote! { ardemu_core::Register::R30 },
-		Register::R31 => quote! { ardemu_core::Register::R31 },
-	}
-}
-
-fn quote_instruction(instruction: Instruction) -> proc_macro2::TokenStream {
-	match instruction {
-		Instruction::Move { reg, value } => {
-			let reg = quote_register(reg);
-			let value = quote_immediate_or_register(value);
-			quote! {
-				ardemu_core::Instruction::Move { reg: #reg, value: #value }
-			}
-		}
-		Instruction::Add { reg, value } => {
-			let reg = quote_register(reg);
-			let value = quote_immediate_or_register(value);
-			quote! {
-				ardemu_core::Instruction::Add { reg: #reg, value: #value }
-			}
-		}
-		Instruction::Jmp { offset } => quote! {
-			ardemu_core::Instruction::Jmp { offset: #offset }
-		},
-		Instruction::Store { value, addr } => {
-			let value = quote_immediate_or_register(value);
-			quote! {
-				ardemu_core::Instruction::Store { value: #value, addr: #addr }
-			}
-		}
-	}
-}
 
 #[proc_macro]
 pub fn parse_asm(input: TokenStream) -> TokenStream {
 	let asm_input = parse_macro_input!(input as LitStr).value();
 	let expanded = match ardemu_core::parse_asm(&asm_input) {
 		Ok(instructions) => {
-			let instruction_tokens = instructions
-				.into_iter()
-				.map(quote_instruction)
-				.collect::<Vec<_>>();
-
+			let instruction_tokens = instructions.into_iter().collect::<Vec<_>>().to_tokens();
 			quote! {
-				[ #(#instruction_tokens),* ]
+				{
+					use ardemu_core::{Instruction, Register, RegisterOrImmediate};
+
+					#instruction_tokens
+				}
 			}
 		}
 		Err(e) => {
@@ -121,17 +42,17 @@ pub fn include_asm(input: TokenStream) -> TokenStream {
 		Ok(asm_file_contents) => {
 			match ardemu_core::parse_asm(&asm_file_contents) {
 				Ok(instructions) => {
-					let instruction_tokens = instructions
-						.into_iter()
-						.map(quote_instruction)
-						.collect::<Vec<_>>();
+					let instruction_tokens =
+						instructions.into_iter().collect::<Vec<_>>().to_tokens();
 
 					quote! {
 						{
+							use ardemu_core::{Instruction, Register, RegisterOrImmediate};
+
 							/// this will make the compiler recompile when the file changes
 							const _RECOMPILE_IF_CHANGED_HANDLE: &str = include_str!(#asm_filepath_str);
 
-							[ #(#instruction_tokens),* ]
+							#instruction_tokens
 						}
 					}
 				}

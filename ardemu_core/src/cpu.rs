@@ -44,10 +44,10 @@ impl Cpu {
 		reg.set_in(&mut self.registers, value);
 	}
 
-	fn set_ram(&mut self, addr: usize, value: u8) -> Result<(), CpuError> {
+	fn set_ram(&mut self, addr: u32, value: u8) -> Result<(), CpuError> {
 		let mut_ram = self
 			.sram
-			.get_mut(addr)
+			.get_mut(addr as usize)
 			.ok_or(CpuError::InvalidRamAddress { addr })?;
 		*mut_ram = value;
 		Ok(())
@@ -89,13 +89,15 @@ impl Default for Cpu {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+	use crate::{R0, R1};
+
 	use super::*;
 
 	#[test]
 	fn test_execute_move() {
 		let mut cpu = Cpu::default();
 		cpu.execute(Instruction::Move {
-			reg: Register::R0,
+			reg: R0,
 			value: 42.into(),
 		})
 		.unwrap();
@@ -108,8 +110,8 @@ mod tests {
 		cpu.registers[0] = 42;
 		cpu.registers[1] = 23;
 		cpu.execute(Instruction::Add {
-			reg: Register::R0,
-			value: Register::R1.into(),
+			reg: R0,
+			value: R1.into(),
 		})
 		.unwrap();
 		assert_eq!(cpu.registers[0], 42 + 23);

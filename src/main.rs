@@ -12,7 +12,7 @@ fn main() {
 			return;
 		}
 		println!(
-			"{}: {instr:?}\n\t-> r0={:#04x}, r1={:#04x}, LED={}",
+			"{}: {instr}\n\t-> r0={:#04x}, r1={:#04x}, LED={}",
 			cpu.program_counter,
 			cpu.registers[0],
 			cpu.registers[1],

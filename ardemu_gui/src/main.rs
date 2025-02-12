@@ -133,7 +133,7 @@ impl App {
 								.iter()
 								.enumerate()
 								.map(|(i, instr)| {
-									text(format!("{i}: {instr:?}"))
+									text(format!("{i}: {instr}"))
 										.font(Font::MONOSPACE)
 										.color_maybe(if program_counter == i {
 											Some(Color::from_rgb(1.0, 0.0, 0.0))

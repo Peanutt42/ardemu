@@ -4,7 +4,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, Copy, Error)]
 pub enum CpuError {
 	#[error("Invalid RAM address {addr:#04x}")]
-	InvalidRamAddress { addr: usize },
+	InvalidRamAddress { addr: u32 },
 }
 
 #[derive(Clone, PartialEq, Eq)]

@@ -8,6 +8,10 @@ members = ["ardemu_core", "ardemu_asm_parse_macro", "ardemu_gui"]
 
 [workspace.dependencies]
 thiserror = { version = "2.0" }
+self-rust-tokenize = "0.4.0"
+quote = { version = "1.0.38" }
+syn = { version = "2.0.98", features = ["full"] }
+proc-macro2 = "1.0"
 
 [dependencies]
 ardemu_core = { path = "ardemu_core" }

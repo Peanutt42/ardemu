@@ -1,6 +1,8 @@
 use crate::{register::RegisterOrImmediate, Register};
+use ardemu_display_instr_macro::DisplayInstruction;
+use self_rust_tokenize::SelfRustTokenize;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, DisplayInstruction, Clone, Copy, PartialEq, Eq, SelfRustTokenize)]
 pub enum Instruction {
 	/// moves value into register
 	Move {
@@ -17,17 +19,6 @@ pub enum Instruction {
 	/// store value in memory at address
 	Store {
 		value: RegisterOrImmediate,
-		addr: usize,
+		addr: u32,
 	},
-}
-
-impl std::fmt::Debug for Instruction {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match *self {
-			Instruction::Move { reg, value } => write!(f, "MOVE {reg}, {value}"),
-			Instruction::Add { reg, value } => write!(f, "ADD {reg}, {value}"),
-			Instruction::Jmp { offset } => write!(f, "JMP {offset}"),
-			Instruction::Store { value, addr } => write!(f, "STORE {value}, {addr:#04x}"),
-		}
-	}
 }

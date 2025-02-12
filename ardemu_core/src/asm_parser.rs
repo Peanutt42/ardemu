@@ -19,6 +19,7 @@ fn parse_label(line: &str) -> Option<String> {
 	}
 }
 
+/// parses different number formats like "0x123" or "0b10101" and normal "42"
 fn parse_number(s: &str) -> Result<u32, AsmParseErrorType> {
 	if let Some(s) = s.strip_prefix("0x") {
 		u32::from_str_radix(s, 16).map_err(|source| AsmParseErrorType::InvalidNumber {
@@ -39,6 +40,7 @@ fn parse_number(s: &str) -> Result<u32, AsmParseErrorType> {
 	}
 }
 
+/// expects a register name like "r0" with a prefix of "r"
 fn parse_register(s: &str) -> Result<Register, AsmParseErrorType> {
 	match s.strip_prefix("r") {
 		Some(s) => {
@@ -104,7 +106,7 @@ fn parse_instruction(
 		}
 		"STORE" => {
 			let value = parse_immediate_or_register(&operands[0])?;
-			let addr = parse_number(&operands[1])? as usize;
+			let addr = parse_number(&operands[1])?;
 			Ok(Instruction::Store { value, addr })
 		}
 		_ => Err(AsmParseErrorType::InvalidInstruction(mnemonic.to_string())),
@@ -158,7 +160,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 #[cfg(test)]
 mod tests {
 	use crate as ardemu_core;
-	use crate::{Instruction, Register};
+	use crate::{Instruction, R0, R1, R2};
 	use ardemu_asm_parse_macro::parse_asm;
 
 	#[test]
@@ -179,23 +181,23 @@ mod tests {
 			),
 			[
 				Instruction::Move {
-					reg: Register::R0,
+					reg: R0,
 					value: 0.into()
 				},
 				Instruction::Move {
-					reg: Register::R1,
+					reg: R1,
 					value: 1.into()
 				},
 				Instruction::Move {
-					reg: Register::R2,
+					reg: R2,
 					value: 2.into()
 				},
 				Instruction::Store {
-					value: Register::R0.into(),
+					value: R0.into(),
 					addr: 0x50
 				},
 				Instruction::Store {
-					value: Register::R1.into(),
+					value: R1.into(),
 					addr: 0x51
 				},
 				Instruction::Jmp { offset: -2 },
