@@ -4,19 +4,33 @@ use crate::{
 };
 use std::collections::HashMap;
 
-/// removes comments (';')
-fn preprocess_line(line: &str) -> String {
-	let line = line.split(';').next().unwrap_or("").trim();
-	line.to_string()
+struct Line {
+	/// preprocessed line
+	str: String,
+	/// original from source code
+	line_number: usize,
+	/// parsed label
+	label: Option<String>,
 }
 
-fn parse_label(line: &str) -> Option<String> {
-	let line = line.trim();
-	if line.ends_with(':') {
-		let label = line.split(':').next()?.trim();
-		Some(label.to_string())
-	} else {
-		None
+impl Line {
+	/// preprocesses `str` and removes any comments (';')
+	fn new(str: &str, line_number: usize) -> Self {
+		let str_without_comments = str.split(';').next().unwrap_or("").trim().to_string();
+		let label = if str_without_comments.ends_with(':') {
+			str_without_comments
+				.split(':')
+				.next()
+				.map(|s| s.trim().to_string())
+		} else {
+			None
+		};
+
+		Self {
+			str: str_without_comments,
+			line_number,
+			label,
+		}
 	}
 }
 
@@ -182,39 +196,39 @@ fn parse_instruction(
 }
 
 pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
-	let lines: Vec<String> = asm
+	let lines: Vec<Line> = asm
 		.lines()
-		.map(preprocess_line)
-		.filter(|l| !l.is_empty())
+		.enumerate()
+		.map(|(i, line_str)| Line::new(line_str, i + 1))
+		.filter(|l| !l.str.is_empty())
 		.collect();
 
-	let mut symbol_table = HashMap::new();
+	// maps symbol label to program address
+	let mut symbol_table: HashMap<String, usize> = HashMap::new();
 	let mut program_counter = 0;
 	for line in &lines {
-		match parse_label(line) {
+		match &line.label {
 			Some(label) => {
-				symbol_table.insert(label, program_counter);
+				symbol_table.insert(label.clone(), program_counter);
 			}
-			None if !line.starts_with('.') => program_counter += 1,
+			None if !line.str.starts_with('.') => program_counter += 1,
 			_ => {}
 		}
 	}
 
 	let mut instructions = Vec::new();
-	for (i, line) in lines.iter().enumerate() {
-		let line_number = i + 1;
-
-		if parse_label(line).is_some() {
+	for line in lines {
+		if line.label.is_some() {
 			continue;
 		}
 
-		let (mnemonic, operands) = split_mnemonic_operands(line);
+		let (mnemonic, operands) = split_mnemonic_operands(&line.str);
 		if mnemonic.is_empty() {
 			continue;
 		}
 
 		let instruction = parse_instruction(&mnemonic, &operands, &symbol_table)
-			.map_err(|error| AsmParseError::new(error, line_number))?;
+			.map_err(|error| AsmParseError::new(error, line.line_number))?;
 
 		instructions.push(instruction);
 	}
@@ -304,6 +318,23 @@ mod tests {
 					actual_count: 3,
 				},
 				1
+			))
+		);
+	}
+
+	#[test]
+	fn test_parse_line_number() {
+		assert_eq!(
+			parse_asm(
+				r"; line 1
+			; line 2
+
+			; empty line above...
+			invalidinstruction ; on line 3"
+			),
+			Err(AsmParseError::new(
+				AsmParseErrorType::InvalidInstruction("invalidinstruction".to_string()),
+				5
 			))
 		);
 	}
