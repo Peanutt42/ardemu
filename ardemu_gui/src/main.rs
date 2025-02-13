@@ -4,7 +4,7 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
-use ardemu_core::{parse_asm, AsmParseError, Cpu, Instruction};
+use ardemu_core::{parse_asm, AsmParseError, Cpu, Instruction, Register};
 use iced::{
 	alignment::Vertical,
 	time,
@@ -124,7 +124,7 @@ impl App {
 			row![
 				match &self.asm_output {
 					Ok(asm_instructions) => {
-						let program_counter = self.cpu.program_counter;
+						let program_counter = self.cpu.get_program_counter();
 
 						Column::with_children(
 							asm_instructions
@@ -148,8 +148,10 @@ impl App {
 					}
 					Err(e) => Element::new(text(format!("Error: {e:?}")).width(Fill)),
 				},
-				Column::with_children(self.cpu.registers.iter().enumerate().map(|(i, reg)| {
-					text(format!("r{i} = {reg:#04x}"))
+				Column::with_children(Register::ALL.iter().map(|reg| {
+					let value = self.cpu.read_register(*reg);
+
+					text(format!("{reg} = {value:#04x}"))
 						.font(Font::MONOSPACE)
 						.into()
 				}))

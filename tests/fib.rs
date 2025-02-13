@@ -10,9 +10,11 @@ fn fib() {
 
 	let n = 10;
 
-	cpu.registers[A as usize] = n;
+	cpu.write_register(A, n);
 
 	while cpu.step().unwrap() {}
 
-	assert_eq!(cpu.registers[Z as usize], 55);
+	let result = cpu.read_register(Z);
+
+	assert_eq!(result, 55);
 }

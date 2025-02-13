@@ -115,14 +115,24 @@ pub enum Register {
 
 impl Register {
 	pub const COUNT: usize = 8;
+	pub const ALL: &[Register; Self::COUNT] = &[
+		Self::A,
+		Self::B,
+		Self::C,
+		Self::D,
+		Self::L,
+		Self::H,
+		Self::Z,
+		Self::F,
+	];
 
 	/// this will not panic, enforced by the type
-	pub fn get_from(&self, registers: &[u8; Self::COUNT]) -> u8 {
+	pub fn read_from(&self, registers: &[u8; Self::COUNT]) -> u8 {
 		registers[*self as usize]
 	}
 
 	/// this will not panic, enforced by the type
-	pub fn set_in(&self, registers: &mut [u8; Self::COUNT], value: u8) {
+	pub fn write_in(&self, registers: &mut [u8; Self::COUNT], value: u8) {
 		registers[*self as usize] = value;
 	}
 }

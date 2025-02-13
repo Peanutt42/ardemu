@@ -5,11 +5,11 @@ const SRAM_SIZE: usize = 2048;
 #[derive(Debug, Clone)]
 pub struct Cpu {
 	program: Box<[Instruction]>,
-	pub registers: [u8; 8],
-	pub program_counter: u16,
+	registers: [u8; 8],
+	program_counter: u16,
 	/// address pointer
-	pub hl: u16,
-	pub sram: [u8; SRAM_SIZE], // SRAM (2KB)
+	hl: u16,
+	sram: [u8; SRAM_SIZE], // SRAM (2KB)
 }
 
 impl Cpu {
@@ -31,16 +31,20 @@ impl Cpu {
 		self.sram = [0u8; SRAM_SIZE];
 	}
 
+	pub fn get_program_counter(&self) -> u16 {
+		self.program_counter
+	}
+
 	pub fn get_current_instruction(&self) -> Option<Instruction> {
 		self.program.get(self.program_counter as usize).copied()
 	}
 
-	fn get_register_value(&self, reg: Register) -> u8 {
-		reg.get_from(&self.registers)
+	pub fn read_register(&self, reg: Register) -> u8 {
+		reg.read_from(&self.registers)
 	}
 
-	fn set_register_value(&mut self, reg: Register, value: u8) {
-		reg.set_in(&mut self.registers, value);
+	pub fn write_register(&mut self, reg: Register, value: u8) {
+		reg.write_in(&mut self.registers, value);
 	}
 
 	fn read_ram(&self, address: u16) -> Result<u8, CpuError> {
@@ -62,18 +66,18 @@ impl Cpu {
 	pub fn execute(&mut self, instruction: Instruction) -> Result<(), CpuError> {
 		match instruction {
 			Instruction::Mw { reg, value } => {
-				let value = value.imm8_or_else(|reg| self.get_register_value(reg));
-				self.set_register_value(reg, value);
+				let value = value.imm8_or_else(|reg| self.read_register(reg));
+				self.write_register(reg, value);
 				self.program_counter += 1;
 			}
 			Instruction::Lw { register, address } => {
 				let value = self.read_ram(address.imm16_or_hl(self.hl))?;
-				self.set_register_value(register, value);
+				self.write_register(register, value);
 				self.program_counter += 1;
 			}
 			Instruction::Sw { address, register } => {
 				let address = address.imm16_or_hl(self.hl);
-				let value = self.get_register_value(register);
+				let value = self.read_register(register);
 				self.write_ram(address, value)?;
 				self.program_counter += 1;
 			}
@@ -82,7 +86,7 @@ impl Cpu {
 				self.program_counter += 1;
 			}
 			Instruction::Jnz { value } => {
-				let value = value.imm8_or_else(|reg| self.get_register_value(reg));
+				let value = value.imm8_or_else(|reg| self.read_register(reg));
 				if value != 0 {
 					self.program_counter = self.hl;
 				} else {
@@ -90,33 +94,33 @@ impl Cpu {
 				}
 			}
 			Instruction::Add { reg, value } => {
-				let reg_value = self.get_register_value(reg);
-				let other_value = value.imm8_or_else(|reg| self.get_register_value(reg));
-				self.set_register_value(reg, reg_value.wrapping_add(other_value));
+				let reg_value = self.read_register(reg);
+				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
+				self.write_register(reg, reg_value.wrapping_add(other_value));
 				self.program_counter += 1;
 			}
 			Instruction::Sub { reg, value } => {
-				let reg_value = self.get_register_value(reg);
-				let other_value = value.imm8_or_else(|reg| self.get_register_value(reg));
-				self.set_register_value(reg, reg_value.wrapping_sub(other_value));
+				let reg_value = self.read_register(reg);
+				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
+				self.write_register(reg, reg_value.wrapping_sub(other_value));
 				self.program_counter += 1;
 			}
 			Instruction::And { reg, value } => {
-				let reg_value = self.get_register_value(reg);
-				let other_value = value.imm8_or_else(|reg| self.get_register_value(reg));
-				self.set_register_value(reg, reg_value & other_value);
+				let reg_value = self.read_register(reg);
+				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
+				self.write_register(reg, reg_value & other_value);
 				self.program_counter += 1;
 			}
 			Instruction::Or { reg, value } => {
-				let reg_value = self.get_register_value(reg);
-				let other_value = value.imm8_or_else(|reg| self.get_register_value(reg));
-				self.set_register_value(reg, reg_value | other_value);
+				let reg_value = self.read_register(reg);
+				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
+				self.write_register(reg, reg_value | other_value);
 				self.program_counter += 1;
 			}
 			Instruction::Nor { reg, value } => {
-				let reg_value = self.get_register_value(reg);
-				let other_value = value.imm8_or_else(|reg| self.get_register_value(reg));
-				self.set_register_value(reg, !(reg_value | other_value));
+				let reg_value = self.read_register(reg);
+				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
+				self.write_register(reg, !(reg_value | other_value));
 				self.program_counter += 1;
 			}
 		}
