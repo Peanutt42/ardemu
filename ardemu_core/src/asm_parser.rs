@@ -1,4 +1,7 @@
-use crate::{register::RegisterOrImm8, AsmParseError, AsmParseErrorType, Instruction, Register};
+use crate::{
+	register::{HlOrImm16, RegisterOrImm8},
+	AsmParseError, AsmParseErrorType, Instruction, Register,
+};
 use std::collections::HashMap;
 
 /// removes comments (';')
@@ -98,6 +101,36 @@ fn parse_instruction(
 			let value = parse_imm8_or_register(operands[1])?;
 			Ok(Instruction::Mw { reg, value })
 		}
+		"LW" => match operands.len() {
+			1 | 2 => {
+				let register = parse_register(operands[0])?;
+				let address = match operands.get(1) {
+					Some(address) => (parse_number(address)? as u16).into(),
+					None => HlOrImm16::Hl,
+				};
+				Ok(Instruction::Lw { register, address })
+			}
+			_ => Err(AsmParseErrorType::InvalidDynamicArgumentCount {
+				allowed_counts: vec![1, 2],
+				actual_count: operands.len(),
+			}),
+		},
+		"SW" => match operands.len() {
+			1 => {
+				let address = HlOrImm16::Hl;
+				let register = parse_register(operands[0])?;
+				Ok(Instruction::Sw { address, register })
+			}
+			2 => {
+				let address = (parse_number(operands[0])? as u16).into();
+				let register = parse_register(operands[1])?;
+				Ok(Instruction::Sw { address, register })
+			}
+			_ => Err(AsmParseErrorType::InvalidDynamicArgumentCount {
+				allowed_counts: vec![1, 2],
+				actual_count: operands.len(),
+			}),
+		},
 		"LDA" => {
 			let operands = consume_operands::<1>(operands)?;
 			let address = symbol_table

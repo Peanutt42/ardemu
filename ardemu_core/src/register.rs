@@ -17,13 +17,40 @@ impl std::fmt::Display for Imm16 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, SelfRustTokenize)]
+pub enum HlOrImm16 {
+	Hl,
+	Imm16(Imm16),
+}
+impl HlOrImm16 {
+	pub fn imm16_or_hl(&self, hl: u16) -> u16 {
+		match *self {
+			Self::Hl => hl,
+			Self::Imm16(imm16) => imm16.0,
+		}
+	}
+}
+impl From<u16> for HlOrImm16 {
+	fn from(value: u16) -> Self {
+		Self::Imm16(Imm16(value))
+	}
+}
+impl std::fmt::Display for HlOrImm16 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Hl => write!(f, "HL"),
+			Self::Imm16(imm) => write!(f, "{}", imm),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SelfRustTokenize)]
 pub enum RegisterOrImm8 {
 	Register(Register),
 	Imm8(u8),
 }
 
 impl RegisterOrImm8 {
-	pub fn imm_or_else(&self, else_callback: impl FnOnce(Register) -> u8) -> u8 {
+	pub fn imm8_or_else(&self, else_callback: impl FnOnce(Register) -> u8) -> u8 {
 		match *self {
 			Self::Imm8(immediate) => immediate,
 			Self::Register(reg) => else_callback(reg),

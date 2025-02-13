@@ -4,7 +4,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, Copy, Error)]
 pub enum CpuError {
 	#[error("Invalid RAM address {addr:#04x}")]
-	InvalidRamAddress { addr: u32 },
+	InvalidRamAddress { addr: u16 },
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -28,6 +28,11 @@ pub enum AsmParseErrorType {
 	#[error("invalid argument count, expected {expected_count}, got {actual_count}")]
 	InvalidArgumentCount {
 		expected_count: usize,
+		actual_count: usize,
+	},
+	#[error("invalid argument count, expected any of {allowed_counts:?}, got {actual_count}")]
+	InvalidDynamicArgumentCount {
+		allowed_counts: Vec<usize>,
 		actual_count: usize,
 	},
 	#[error("invalid instruction: '{0}'")]

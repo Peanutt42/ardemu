@@ -1,5 +1,5 @@
 use crate::{
-	register::{Imm16, RegisterOrImm8},
+	register::{HlOrImm16, Imm16, RegisterOrImm8},
 	Register,
 };
 use ardemu_display_instr_macro::DisplayInstruction;
@@ -11,6 +11,16 @@ pub enum Instruction {
 	Mw {
 		reg: Register,
 		value: RegisterOrImm8,
+	},
+	/// load value in address into register
+	Lw {
+		register: Register,
+		address: HlOrImm16,
+	},
+	/// stores value of register into address
+	Sw {
+		address: HlOrImm16,
+		register: Register,
 	},
 	/// sets HL to address
 	Lda { address: Imm16 },
