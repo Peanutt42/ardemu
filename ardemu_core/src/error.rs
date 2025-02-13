@@ -32,7 +32,7 @@ pub enum AsmParseErrorType {
 	},
 	#[error("invalid instruction: '{0}'")]
 	InvalidInstruction(String),
-	#[error("invalid register: '{0}', must be between r0 and r31!")]
+	#[error("invalid register: '{0}'")]
 	InvalidRegister(String),
 	#[error("invalid number '{string}': {source}")]
 	InvalidNumber {

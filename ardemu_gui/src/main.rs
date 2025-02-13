@@ -25,7 +25,7 @@ struct App {
 
 impl Default for App {
 	fn default() -> Self {
-		let asm_source_code = include_str!("../../src/blink.asm").to_string();
+		let asm_source_code = include_str!("../../src/main.asm").to_string();
 		Self {
 			cpu: Cpu::default(),
 			simulate_cpu: false,
@@ -135,7 +135,7 @@ impl App {
 								.map(|(i, instr)| {
 									text(format!("{i}: {instr}"))
 										.font(Font::MONOSPACE)
-										.color_maybe(if program_counter == i {
+										.color_maybe(if program_counter == i as u16 {
 											Some(Color::from_rgb(1.0, 0.0, 0.0))
 										} else {
 											None
@@ -156,16 +156,6 @@ impl App {
 						.into()
 				}))
 				.spacing(10)
-				.width(Fill),
-				text!(
-					"LED is {}",
-					if self.cpu.is_builtin_led_on() {
-						"on"
-					} else {
-						"off"
-					}
-				)
-				.font(Font::MONOSPACE)
 				.width(Fill),
 			]
 			.spacing(10)

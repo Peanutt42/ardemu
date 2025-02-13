@@ -2,7 +2,7 @@ use ardemu_asm_parse_macro::include_asm;
 use ardemu_core::Cpu;
 
 fn main() {
-	let program = include_asm!("src/blink.asm");
+	let program = include_asm!("src/main.asm");
 
 	let mut cpu = Cpu::default();
 
@@ -12,15 +12,8 @@ fn main() {
 			return;
 		}
 		println!(
-			"{}: {instr}\n\t-> r0={:#04x}, r1={:#04x}, LED={}",
-			cpu.program_counter,
-			cpu.registers[0],
-			cpu.registers[1],
-			if cpu.is_builtin_led_on() {
-				"HIGH"
-			} else {
-				"LOW"
-			}
+			"{}: {instr}\n\t-> a={:#04x}, b={:#04x}",
+			cpu.program_counter, cpu.registers[0], cpu.registers[1]
 		);
 	}
 

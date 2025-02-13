@@ -1,6 +1,4 @@
-use crate::{
-	register::RegisterOrImmediate, AsmParseError, AsmParseErrorType, Instruction, Register,
-};
+use crate::{register::RegisterOrImm8, AsmParseError, AsmParseErrorType, Instruction, Register};
 use std::collections::HashMap;
 
 /// removes comments (';')
@@ -40,27 +38,24 @@ fn parse_number(s: &str) -> Result<u32, AsmParseErrorType> {
 	}
 }
 
-/// expects a register name like "r0" with a prefix of "r"
 fn parse_register(s: &str) -> Result<Register, AsmParseErrorType> {
-	match s.strip_prefix("r") {
-		Some(s) => {
-			let number = s
-				.parse::<u8>()
-				.map_err(|source| AsmParseErrorType::InvalidNumber {
-					string: s.to_string(),
-					source,
-				})?;
-			Register::try_from(number)
-				.map_err(|_| AsmParseErrorType::InvalidRegister(s.to_string()))
-		}
-		None => Err(AsmParseErrorType::InvalidRegister(s.to_string())),
+	match s {
+		"a" => Ok(Register::A),
+		"b" => Ok(Register::B),
+		"c" => Ok(Register::C),
+		"d" => Ok(Register::D),
+		"l" => Ok(Register::L),
+		"h" => Ok(Register::H),
+		"z" => Ok(Register::Z),
+		"f" => Ok(Register::F),
+		_ => Err(AsmParseErrorType::InvalidRegister(s.to_string())),
 	}
 }
 
-fn parse_immediate_or_register(s: &str) -> Result<RegisterOrImmediate, AsmParseErrorType> {
+fn parse_imm8_or_register(s: &str) -> Result<RegisterOrImm8, AsmParseErrorType> {
 	match parse_register(s) {
-		Ok(register) => Ok(RegisterOrImmediate::Register(register)),
-		Err(_) => parse_number(s).map(|immediate| RegisterOrImmediate::Immediate(immediate as u8)),
+		Ok(register) => Ok(RegisterOrImm8::Register(register)),
+		Err(_) => parse_number(s).map(|immediate| RegisterOrImm8::Imm8(immediate as u8)),
 	}
 }
 
@@ -95,35 +90,53 @@ fn parse_instruction(
 	mnemonic: &str,
 	operands: &[&str],
 	symbol_table: &HashMap<String, usize>,
-	current_program_counter: usize,
 ) -> Result<Instruction, AsmParseErrorType> {
 	match mnemonic.to_uppercase().as_str() {
-		"MOVE" => {
+		"MW" => {
 			let operands = consume_operands::<2>(operands)?;
 			let reg = parse_register(operands[0])?;
-			let value = parse_immediate_or_register(operands[1])?;
-			Ok(Instruction::Move { reg, value })
+			let value = parse_imm8_or_register(operands[1])?;
+			Ok(Instruction::Mw { reg, value })
+		}
+		"LDA" => {
+			let operands = consume_operands::<1>(operands)?;
+			let address = symbol_table
+				.get(operands[0])
+				.copied()
+				.ok_or(AsmParseErrorType::UndefinedLabel(operands[0].to_string()))?
+				as u16;
+			Ok(Instruction::Lda {
+				address: crate::register::Imm16(address),
+			})
+		}
+		"JNZ" => {
+			let operands = consume_operands::<1>(operands)?;
+			let value = parse_imm8_or_register(operands[0])?;
+			Ok(Instruction::Jnz { value })
 		}
 		"ADD" => {
 			let operands = consume_operands::<2>(operands)?;
 			let reg = parse_register(operands[0])?;
-			let value = parse_immediate_or_register(operands[1])?;
+			let value = parse_imm8_or_register(operands[1])?;
 			Ok(Instruction::Add { reg, value })
 		}
-		"JMP" => {
-			let operands = consume_operands::<1>(operands)?;
-			let target = symbol_table
-				.get(operands[0])
-				.copied()
-				.ok_or(AsmParseErrorType::UndefinedLabel(operands[0].to_string()))?;
-			let offset = target as i32 - current_program_counter as i32;
-			Ok(Instruction::Jmp { offset })
-		}
-		"STORE" => {
+		"AND" => {
 			let operands = consume_operands::<2>(operands)?;
-			let value = parse_immediate_or_register(operands[0])?;
-			let addr = parse_number(operands[1])?;
-			Ok(Instruction::Store { value, addr })
+			let reg = parse_register(operands[0])?;
+			let value = parse_imm8_or_register(operands[1])?;
+			Ok(Instruction::And { reg, value })
+		}
+		"OR" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg = parse_register(operands[0])?;
+			let value = parse_imm8_or_register(operands[1])?;
+			Ok(Instruction::Or { reg, value })
+		}
+		"NOR" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg = parse_register(operands[0])?;
+			let value = parse_imm8_or_register(operands[1])?;
+			Ok(Instruction::Nor { reg, value })
 		}
 		_ => Err(AsmParseErrorType::InvalidInstruction(mnemonic.to_string())),
 	}
@@ -149,7 +162,6 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 	}
 
 	let mut instructions = Vec::new();
-	let mut current_program_counter = 0;
 	for (i, line) in lines.iter().enumerate() {
 		let line_number = i + 1;
 
@@ -162,12 +174,10 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 			continue;
 		}
 
-		let instruction =
-			parse_instruction(&mnemonic, &operands, &symbol_table, current_program_counter)
-				.map_err(|error| AsmParseError::new(error, line_number))?;
+		let instruction = parse_instruction(&mnemonic, &operands, &symbol_table)
+			.map_err(|error| AsmParseError::new(error, line_number))?;
 
 		instructions.push(instruction);
-		current_program_counter += 1;
 	}
 
 	Ok(instructions)
@@ -176,7 +186,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 #[cfg(test)]
 mod tests {
 	use crate::{self as ardemu_core, parse_asm, AsmParseError, AsmParseErrorType};
-	use crate::{Instruction, R0, R1, R2};
+	use crate::{Instruction, A, B, C};
 	use ardemu_asm_parse_macro::parse_asm;
 
 	#[test]
@@ -185,38 +195,42 @@ mod tests {
 			parse_asm!(
 				r"
 				; leading comment
-				move r0, 0 ; comment
-				move r1, 1
-				move r2, 2
+				mw a, 0 ; comment
+				mw b, 1
+				mw c, 2
 				; another comment
 			loop:
-				store r0, 0x50
-				store r1, 0x51
-				jmp loop
+				add a, b
+				and a, b
+				lda loop
+				jnz 1
 			"
 			),
 			[
-				Instruction::Move {
-					reg: R0,
+				Instruction::Mw {
+					reg: A,
 					value: 0.into()
 				},
-				Instruction::Move {
-					reg: R1,
+				Instruction::Mw {
+					reg: B,
 					value: 1.into()
 				},
-				Instruction::Move {
-					reg: R2,
+				Instruction::Mw {
+					reg: C,
 					value: 2.into()
 				},
-				Instruction::Store {
-					value: R0.into(),
-					addr: 0x50
+				Instruction::Add {
+					reg: A,
+					value: B.into(),
 				},
-				Instruction::Store {
-					value: R1.into(),
-					addr: 0x51
+				Instruction::And {
+					reg: A,
+					value: B.into(),
 				},
-				Instruction::Jmp { offset: -2 },
+				Instruction::Lda {
+					address: crate::register::Imm16(3)
+				},
+				Instruction::Jnz { value: 1.into() },
 			]
 		);
 	}
@@ -224,7 +238,7 @@ mod tests {
 	#[test]
 	fn test_parse_invalid_argument_count() {
 		assert_eq!(
-			parse_asm("move r0"),
+			parse_asm("mw a"),
 			Err(AsmParseError::new(
 				AsmParseErrorType::InvalidArgumentCount {
 					expected_count: 2,
@@ -234,7 +248,7 @@ mod tests {
 			))
 		);
 		assert_eq!(
-			parse_asm("jmp "),
+			parse_asm("jnz "),
 			Err(AsmParseError::new(
 				AsmParseErrorType::InvalidArgumentCount {
 					expected_count: 1,
@@ -244,7 +258,7 @@ mod tests {
 			))
 		);
 		assert_eq!(
-			parse_asm("store r0 0x0 0x1"),
+			parse_asm("add a 0x0 0x1"),
 			Err(AsmParseError::new(
 				AsmParseErrorType::InvalidArgumentCount {
 					expected_count: 2,
