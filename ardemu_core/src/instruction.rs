@@ -31,6 +31,11 @@ pub enum Instruction {
 		reg: Register,
 		value: RegisterOrImm8,
 	},
+	/// sub value to register
+	Sub {
+		reg: Register,
+		value: RegisterOrImm8,
+	},
 	/// performs and with value and sets result to register
 	And {
 		reg: Register,

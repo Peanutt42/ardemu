@@ -153,6 +153,12 @@ fn parse_instruction(
 			let value = parse_imm8_or_register(operands[1])?;
 			Ok(Instruction::Add { reg, value })
 		}
+		"SUB" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg = parse_register(operands[0])?;
+			let value = parse_imm8_or_register(operands[1])?;
+			Ok(Instruction::Sub { reg, value })
+		}
 		"AND" => {
 			let operands = consume_operands::<2>(operands)?;
 			let reg = parse_register(operands[0])?;

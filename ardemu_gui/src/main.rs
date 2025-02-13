@@ -25,7 +25,7 @@ struct App {
 
 impl Default for App {
 	fn default() -> Self {
-		let asm_source_code = include_str!("../../src/main.asm").to_string();
+		let asm_source_code = include_str!("../../src/fib.asm").to_string();
 		Self {
 			cpu: Cpu::default(),
 			simulate_cpu: false,

@@ -85,6 +85,12 @@ impl Cpu {
 				self.set_register_value(reg, reg_value.wrapping_add(other_value));
 				self.program_counter += 1;
 			}
+			Instruction::Sub { reg, value } => {
+				let reg_value = self.get_register_value(reg);
+				let other_value = value.imm8_or_else(|reg| self.get_register_value(reg));
+				self.set_register_value(reg, reg_value.wrapping_sub(other_value));
+				self.program_counter += 1;
+			}
 			Instruction::And { reg, value } => {
 				let reg_value = self.get_register_value(reg);
 				let other_value = value.imm8_or_else(|reg| self.get_register_value(reg));
@@ -134,7 +140,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_execute_add() {
+	fn test_execute_add_sub() {
 		let mut cpu = Cpu::default();
 		cpu.registers[0] = 42;
 		cpu.registers[1] = 23;
@@ -144,6 +150,14 @@ mod tests {
 		})
 		.unwrap();
 		assert_eq!(cpu.registers[0], 42 + 23);
+		cpu.registers[0] = 42;
+		cpu.registers[1] = 23;
+		cpu.execute(Instruction::Sub {
+			reg: A,
+			value: B.into(),
+		})
+		.unwrap();
+		assert_eq!(cpu.registers[0], 42 - 23);
 	}
 
 	#[test]
