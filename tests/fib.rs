@@ -6,17 +6,13 @@ use ardemu_core::{
 
 #[test]
 fn fib() {
-	let program = include_asm!("src/fib.asm");
-
-	let mut cpu = Cpu::default();
+	let mut cpu = Cpu::new(include_asm!("src/fib.asm"));
 
 	let n = 10;
 
 	cpu.registers[A as usize] = n;
 
-	while let Some(instr) = cpu.get_current_instruction(&program) {
-		cpu.execute(instr).expect("failed to execute instruction");
-	}
+	while cpu.step().unwrap() {}
 
 	assert_eq!(cpu.registers[Z as usize], 55);
 }

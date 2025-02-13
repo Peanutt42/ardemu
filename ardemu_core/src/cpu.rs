@@ -4,6 +4,7 @@ const SRAM_SIZE: usize = 2048;
 
 #[derive(Debug, Clone)]
 pub struct Cpu {
+	program: Box<[Instruction]>,
 	pub registers: [u8; 8],
 	pub program_counter: u16,
 	/// address pointer
@@ -12,8 +13,9 @@ pub struct Cpu {
 }
 
 impl Cpu {
-	pub fn new() -> Self {
+	pub fn new(program: impl Into<Box<[Instruction]>>) -> Self {
 		Self {
+			program: program.into(),
 			registers: [0; Register::COUNT],
 			program_counter: 0,
 			hl: 0,
@@ -21,8 +23,16 @@ impl Cpu {
 		}
 	}
 
-	pub fn get_current_instruction(&self, instructions: &[Instruction]) -> Option<Instruction> {
-		instructions.get(self.program_counter as usize).copied()
+	/// resets everything except the last loaded program
+	pub fn reset(&mut self) {
+		self.program_counter = 0;
+		self.hl = 0;
+		self.registers = [0; Register::COUNT];
+		self.sram = [0u8; SRAM_SIZE];
+	}
+
+	pub fn get_current_instruction(&self) -> Option<Instruction> {
+		self.program.get(self.program_counter as usize).copied()
 	}
 
 	fn get_register_value(&self, reg: Register) -> u8 {
@@ -113,11 +123,22 @@ impl Cpu {
 
 		Ok(())
 	}
+
+	/// Result::Ok(bool) returns false if the program has finished
+	pub fn step(&mut self) -> Result<bool, CpuError> {
+		match self.get_current_instruction() {
+			Some(instruction) => {
+				self.execute(instruction)?;
+				Ok(true)
+			}
+			None => Ok(false),
+		}
+	}
 }
 
 impl Default for Cpu {
 	fn default() -> Self {
-		Self::new()
+		Self::new([])
 	}
 }
 

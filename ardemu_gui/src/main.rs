@@ -72,28 +72,26 @@ impl App {
 				self.simulate_cpu = simulate_cpu;
 			}
 			Message::ResetCpu => {
-				self.cpu = Cpu::default();
+				self.cpu.reset();
 			}
-			Message::Step => {
-				if let Ok(asm_instructions) = self.asm_output.as_ref() {
-					match self.cpu.get_current_instruction(asm_instructions) {
-						Some(instr) => {
-							if let Err(e) = self.cpu.execute(instr) {
-								eprintln!("failed to execute instruction: {e}");
-							}
-						}
-						None => {
-							println!("Program finished");
-						}
+			Message::Step => match self.cpu.step() {
+				Ok(continue_execution) => {
+					if !continue_execution {
+						println!("Program finished");
 					}
 				}
-			}
+				Err(e) => {
+					eprintln!("failed to step cpu: {e}");
+				}
+			},
 			Message::AsmSourceCodeChanged(action) => {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
 				if is_edit {
 					self.asm_output = parse_asm(&self.asm_source_code_text_content.text());
-					self.cpu = Cpu::default();
+					if let Ok(instructions) = self.asm_output.as_ref() {
+						self.cpu = Cpu::new(instructions.as_slice());
+					}
 				}
 			}
 		}
