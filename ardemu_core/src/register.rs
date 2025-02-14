@@ -142,7 +142,7 @@ macro_rules! display_register {
 		impl std::fmt::Display for Register {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				match *self {
-					$(Register::$variant => write!(f, "{}", stringify!($variant).to_lowercase()),)*
+					$(Register::$variant => write!(f, "{}", stringify!($variant).to_uppercase()),)*
 				}
 			}
 		}

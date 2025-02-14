@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>Ardemu Web CPU Emulator</title>
+		<link rel="stylesheet" href="/style.css" />
+	</head>
+	<body>
+		<script type="module" src="./index.js"></script>
+		<div class="split-pane">
+			<div class="editor-pane">
+				<div style="display: flex; justify-content: space-between; align-items: center;">
+					<h3>Assembly Editor</h3>
+				</div>
+				<textarea id="editor" placeholder="Enter assembly instructions here...">
+	MOV R1, 0x0A
+	ADD R2, R1, 0x14
+	CMP R2, 0x1E
+	JNE 0x0012
+				</textarea>
+			</div>
+			<div class="output-pane">
+				
+			</div>
+		</div>
+	</body>
+</html>

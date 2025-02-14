@@ -156,6 +156,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ardemu_web"
+version = "0.1.0"
+dependencies = [
+ "ardemu_core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

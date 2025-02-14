@@ -1,0 +1,14 @@
+[package]
+name = "ardemu_web"
+description = "CPU Emulator running with wasm in browser"
+version = "0.1.0"
+edition = "2018"
+repository = "https://github.com/Peanutt42/ardemu"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ardemu_core = { path = "../ardemu_core" }
+wasm-bindgen = "0.2"

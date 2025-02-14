@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["ardemu_core", "ardemu_asm_parse_macro", "ardemu_gui"]
+members = ["ardemu_core", "ardemu_asm_parse_macro", "ardemu_gui", "ardemu_web"]
 
 [workspace.dependencies]
 thiserror = { version = "2.0" }
