@@ -1,15 +1,23 @@
 use crate::{CpuError, Instruction, Register};
 
-const SRAM_SIZE: usize = 2048;
+/// 64 KB
+const SRAM_SIZE: usize = 64 * 1024;
+const STACK_START_ADDRESS: u16 = 0xFEFF;
+const STACK_END_ADDRESS: u16 = 0xFC00;
+const STACK_ADDRESS_RANGE: std::ops::Range<u16> = std::ops::Range {
+	start: STACK_END_ADDRESS,
+	end: STACK_START_ADDRESS + 1,
+};
 
 #[derive(Debug, Clone)]
 pub struct Cpu {
 	program: Box<[Instruction]>,
 	registers: [u8; 8],
 	program_counter: u16,
+	stack_pointer: u16,
 	/// address pointer
 	hl: u16,
-	sram: [u8; SRAM_SIZE], // SRAM (2KB)
+	sram: [u8; SRAM_SIZE], // SRAM (64KB)
 }
 
 impl Cpu {
@@ -18,6 +26,7 @@ impl Cpu {
 			program: program.into(),
 			registers: [0; Register::COUNT],
 			program_counter: 0,
+			stack_pointer: STACK_START_ADDRESS,
 			hl: 0,
 			sram: [0u8; SRAM_SIZE],
 		}
@@ -27,6 +36,7 @@ impl Cpu {
 	pub fn reset(&mut self) {
 		self.program_counter = 0;
 		self.hl = 0;
+		self.stack_pointer = 0;
 		self.registers = [0; Register::COUNT];
 		self.sram = [0u8; SRAM_SIZE];
 	}
@@ -48,6 +58,10 @@ impl Cpu {
 	}
 
 	fn read_ram(&self, address: u16) -> Result<u8, CpuError> {
+		if STACK_ADDRESS_RANGE.contains(&address) {
+			return Err(CpuError::InvalidRamAddress { addr: address });
+		}
+
 		let ram = self
 			.sram
 			.get(address as usize)
@@ -55,12 +69,32 @@ impl Cpu {
 		Ok(*ram)
 	}
 	fn write_ram(&mut self, address: u16, value: u8) -> Result<(), CpuError> {
+		if STACK_ADDRESS_RANGE.contains(&address) {
+			return Err(CpuError::InvalidRamAddress { addr: address });
+		}
+
 		let mut_ram = self
 			.sram
 			.get_mut(address as usize)
 			.ok_or(CpuError::InvalidRamAddress { addr: address })?;
 		*mut_ram = value;
 		Ok(())
+	}
+	fn push(&mut self, value: u8) -> Result<(), CpuError> {
+		if self.stack_pointer <= STACK_END_ADDRESS {
+			return Err(CpuError::StackOverflow);
+		}
+		self.sram[self.stack_pointer as usize] = value;
+		self.stack_pointer -= 1;
+		Ok(())
+	}
+	fn pop(&mut self) -> Result<u8, CpuError> {
+		self.stack_pointer += 1;
+		if self.stack_pointer > STACK_START_ADDRESS {
+			return Err(CpuError::StackUnderflow);
+		}
+		let value = self.sram[self.stack_pointer as usize];
+		Ok(value)
 	}
 
 	pub fn execute(&mut self, instruction: Instruction) -> Result<(), CpuError> {
@@ -79,6 +113,16 @@ impl Cpu {
 				let address = address.imm16_or_hl(self.hl);
 				let value = self.read_register(register);
 				self.write_ram(address, value)?;
+				self.program_counter += 1;
+			}
+			Instruction::Push { value } => {
+				let value = value.imm8_or_else(|reg| self.read_register(reg));
+				self.push(value)?;
+				self.program_counter += 1;
+			}
+			Instruction::Pop { register } => {
+				let value = self.pop()?;
+				self.write_register(register, value);
 				self.program_counter += 1;
 			}
 			Instruction::Lda { address } => {
@@ -148,6 +192,7 @@ impl Default for Cpu {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(clippy::panic)]
 mod tests {
 	use crate::{register::HlOrImm16, A, B};
 
@@ -183,6 +228,61 @@ mod tests {
 		})
 		.unwrap();
 		assert_eq!(cpu.registers[0], 42 - 23);
+	}
+
+	#[test]
+	fn test_execute_push_pop() {
+		let mut cpu = Cpu::default();
+		cpu.write_register(A, 42);
+		cpu.write_register(B, 15);
+		cpu.execute(Instruction::Push { value: A.into() }).unwrap();
+		cpu.execute(Instruction::Push { value: B.into() }).unwrap();
+		cpu.write_register(A, 0);
+		cpu.write_register(B, 0);
+		cpu.execute(Instruction::Pop { register: B }).unwrap();
+		cpu.execute(Instruction::Pop { register: A }).unwrap();
+		assert_eq!(cpu.read_register(A), 42);
+		assert_eq!(cpu.read_register(B), 15);
+	}
+
+	#[test]
+	fn test_catch_write_directly_into_stack() {
+		let mut cpu = Cpu::default();
+		cpu.execute(Instruction::Mw {
+			reg: A,
+			value: 42.into(),
+		})
+		.unwrap();
+		assert_eq!(
+			cpu.execute(Instruction::Sw {
+				address: (STACK_START_ADDRESS - 1).into(),
+				register: A,
+			}),
+			Err(CpuError::InvalidRamAddress {
+				addr: STACK_START_ADDRESS - 1
+			})
+		);
+	}
+
+	#[test]
+	fn test_stackoverflow() {
+		let mut cpu = Cpu::default();
+		loop {
+			match cpu.execute(Instruction::Push { value: 0.into() }) {
+				Ok(_) => (),
+				Err(CpuError::StackOverflow) => break,
+				Err(err) => panic!("Unexpected error before stack overflow: {err}"),
+			}
+		}
+	}
+
+	#[test]
+	fn test_stackunderflow() {
+		let mut cpu = Cpu::default();
+		assert_eq!(
+			cpu.execute(Instruction::Pop { register: A }),
+			Err(CpuError::StackUnderflow)
+		);
 	}
 
 	#[test]

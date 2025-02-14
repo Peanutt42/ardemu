@@ -145,6 +145,16 @@ fn parse_instruction(
 				actual_count: operands.len(),
 			}),
 		},
+		"PUSH" => {
+			let operands = consume_operands::<1>(operands)?;
+			let value = parse_imm8_or_register(operands[0])?;
+			Ok(Instruction::Push { value })
+		}
+		"POP" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			Ok(Instruction::Pop { register })
+		}
 		"LDA" => {
 			let operands = consume_operands::<1>(operands)?;
 			let address = symbol_table
@@ -255,6 +265,8 @@ mod tests {
 			loop:
 				add a, b
 				and a, b
+				push a
+				pop a
 				lda loop
 				jnz 1
 			"
@@ -280,6 +292,8 @@ mod tests {
 					reg: A,
 					value: B.into(),
 				},
+				Instruction::Push { value: A.into() },
+				Instruction::Pop { register: A },
 				Instruction::Lda {
 					address: crate::register::Imm16(3)
 				},

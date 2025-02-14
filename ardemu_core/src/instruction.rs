@@ -22,6 +22,10 @@ pub enum Instruction {
 		address: HlOrImm16,
 		register: Register,
 	},
+	/// pushes value onto stack
+	Push { value: RegisterOrImm8 },
+	/// pops value from stack into register
+	Pop { register: Register },
 	/// sets HL to address
 	Lda { address: Imm16 },
 	/// jumps to HL if value != 0
