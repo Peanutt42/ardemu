@@ -1,5 +1,7 @@
 # ardemu
 
+![ardemu_gui](ardemu_gui/Screenshot.png)
+
 `fib.asm`:
 ```asm
 ; a is n
