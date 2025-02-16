@@ -159,6 +159,7 @@ version = "0.1.0"
 dependencies = [
  "ardemu_core",
  "iced",
+ "iced_fonts",
  "triple_buffer",
 ]
 
@@ -1499,6 +1500,15 @@ dependencies = [
  "smol_str",
  "thiserror 1.0.69",
  "web-time",
+]
+
+[[package]]
+name = "iced_fonts"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df7deb0800a850ee25c8a42559f72c0f249e577feb3aad37b9b65dc1e517e52a"
+dependencies = [
+ "iced_core",
 ]
 
 [[package]]

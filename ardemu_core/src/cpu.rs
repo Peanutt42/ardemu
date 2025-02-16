@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{CpuError, Instruction, Register};
 
 /// 64 KB
@@ -9,6 +11,14 @@ const STACK_ADDRESS_RANGE: std::ops::Range<u16> = std::ops::Range {
 	end: STACK_START_ADDRESS + 1,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CpuStatus {
+	Normal,
+	/// the current instruction was not run, as it was marked as a breakpoint
+	BreakpointHit,
+	ProgramFinished,
+}
+
 #[derive(Debug, Clone)]
 pub struct Cpu {
 	program: Box<[Instruction]>,
@@ -18,6 +28,8 @@ pub struct Cpu {
 	/// address pointer
 	hl: u16,
 	sram: [u8; SRAM_SIZE], // SRAM (64KB)
+	// contains the program address of the breakpoints
+	breakpoints: HashSet<u16>,
 }
 
 impl Cpu {
@@ -29,6 +41,7 @@ impl Cpu {
 			stack_pointer: STACK_START_ADDRESS,
 			hl: 0,
 			sram: [0u8; SRAM_SIZE],
+			breakpoints: HashSet::new(),
 		}
 	}
 
@@ -39,6 +52,18 @@ impl Cpu {
 		self.stack_pointer = 0;
 		self.registers = [0; Register::COUNT];
 		self.sram = [0u8; SRAM_SIZE];
+	}
+
+	pub fn add_breakpoint(&mut self, address: u16) {
+		self.breakpoints.insert(address);
+	}
+
+	pub fn remove_breakpoint(&mut self, address: u16) {
+		self.breakpoints.remove(&address);
+	}
+
+	pub fn get_breakpoints(&self) -> &HashSet<u16> {
+		&self.breakpoints
 	}
 
 	pub fn get_program_counter(&self) -> u16 {
@@ -97,7 +122,11 @@ impl Cpu {
 		Ok(value)
 	}
 
-	pub fn execute(&mut self, instruction: Instruction) -> Result<(), CpuError> {
+	pub fn execute(&mut self, instruction: Instruction) -> Result<CpuStatus, CpuError> {
+		if self.breakpoints.contains(&self.program_counter) {
+			return Ok(CpuStatus::BreakpointHit);
+		}
+
 		match instruction {
 			Instruction::Mw { reg, value } => {
 				let value = value.imm8_or_else(|reg| self.read_register(reg));
@@ -169,17 +198,13 @@ impl Cpu {
 			}
 		}
 
-		Ok(())
+		Ok(CpuStatus::Normal)
 	}
 
-	/// Result::Ok(bool) returns false if the program has finished
-	pub fn step(&mut self) -> Result<bool, CpuError> {
+	pub fn step(&mut self) -> Result<CpuStatus, CpuError> {
 		match self.get_current_instruction() {
-			Some(instruction) => {
-				self.execute(instruction)?;
-				Ok(true)
-			}
-			None => Ok(false),
+			Some(instruction) => self.execute(instruction),
+			None => Ok(CpuStatus::ProgramFinished),
 		}
 	}
 }
@@ -194,7 +219,11 @@ impl Default for Cpu {
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::panic)]
 mod tests {
-	use crate::{register::HlOrImm16, A, B};
+	use crate::{
+		register::HlOrImm16,
+		Register::{C, D},
+		A, B,
+	};
 
 	use super::*;
 
@@ -377,5 +406,35 @@ mod tests {
 		})
 		.unwrap();
 		assert_eq!(cpu.registers[0], 42);
+	}
+
+	#[test]
+	fn test_breakpoint() {
+		let program = vec![
+			Instruction::Mw {
+				reg: A,
+				value: 0.into(),
+			},
+			Instruction::Mw {
+				reg: B,
+				value: 1.into(),
+			},
+			// breakpoint will be set here
+			Instruction::Mw {
+				reg: C,
+				value: 2.into(),
+			},
+			Instruction::Mw {
+				reg: D,
+				value: 3.into(),
+			},
+		];
+		let mut cpu = Cpu::new(program);
+		cpu.add_breakpoint(2);
+		assert_eq!(cpu.step(), Ok(CpuStatus::Normal));
+		assert_eq!(cpu.step(), Ok(CpuStatus::Normal));
+		assert_eq!(cpu.step(), Ok(CpuStatus::BreakpointHit));
+		// should not continue execution after breakpoint!
+		assert_eq!(cpu.step(), Ok(CpuStatus::BreakpointHit));
 	}
 }

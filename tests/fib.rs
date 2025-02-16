@@ -1,6 +1,6 @@
 use ardemu_asm_parse_macro::include_asm;
 use ardemu_core::{
-	Cpu,
+	Cpu, CpuStatus,
 	Register::{A, Z},
 };
 
@@ -12,7 +12,7 @@ fn fib() {
 
 	cpu.write_register(A, n);
 
-	while cpu.step().unwrap() {}
+	while matches!(cpu.step(), Ok(CpuStatus::Normal)) {}
 
 	let result = cpu.read_register(Z);
 

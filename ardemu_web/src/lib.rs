@@ -1,5 +1,5 @@
 use ardemu_core::{
-	parse_asm, Cpu,
+	parse_asm, Cpu, CpuStatus,
 	Register::{self, A, Z},
 };
 use wasm_bindgen::prelude::*;
@@ -22,7 +22,16 @@ pub fn evaluate(source_code: &str) -> String {
 
 	cpu.write_register(A, n);
 
-	while cpu.step().unwrap() {}
+	loop {
+		match cpu.step() {
+			Ok(status) => match status {
+				CpuStatus::Normal => {}
+				CpuStatus::BreakpointHit => return "Breakpoint hit!".to_string(),
+				CpuStatus::ProgramFinished => break,
+			},
+			Err(e) => return format!("{e:?}"),
+		}
+	}
 
 	let cpu_register_str = Register::ALL
 		.iter()

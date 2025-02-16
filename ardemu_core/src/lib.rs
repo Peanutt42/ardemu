@@ -8,7 +8,7 @@ mod error;
 pub use error::{AsmParseError, AsmParseErrorType, CpuError};
 
 mod cpu;
-pub use cpu::Cpu;
+pub use cpu::{Cpu, CpuStatus};
 
 mod instruction;
 pub use instruction::Instruction;

@@ -4,16 +4,26 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::{
+	collections::HashMap,
+	sync::mpsc::{Receiver, TryRecvError},
+};
 
-use ardemu_core::{parse_asm, AsmParseError, Cpu, Instruction, Register};
+use ardemu_core::{parse_asm, AsmParseError, Cpu, CpuStatus, Instruction, Register};
 use iced::{
 	alignment::Vertical,
 	border::rounded,
-	widget::{button, column, container, responsive, row, scrollable, text, text_editor, Column},
+	widget::{
+		button, checkbox, column, container, responsive, row, scrollable, text, text_editor,
+		text_input, Column, Space,
+	},
 	window, Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
-	Subscription, Theme,
+	Padding, Subscription, Theme,
+};
+use iced_fonts::{
+	required::{icon_to_string, RequiredIcons},
+	REQUIRED_FONT, REQUIRED_FONT_BYTES,
 };
 
 #[derive(Debug, Clone)]
@@ -21,6 +31,8 @@ enum CpuSimMessage {
 	ResetAndLoadProgram(Vec<Instruction>),
 	SetSimulating(bool),
 	Step,
+	AddBreakpoint(u16),
+	RemoveBreakpoint(u16),
 }
 
 #[derive(Debug)]
@@ -30,6 +42,9 @@ struct App {
 	cpu_sim_subscription_action_sender: std::sync::mpsc::Sender<CpuSimMessage>,
 	asm_source_code_text_content: text_editor::Content,
 	asm_output: Result<Vec<Instruction>, AsmParseError>,
+	new_breakpoint_address_input: String,
+	/// map of breakpoints and their enabled status
+	breakpoints: HashMap<u16, bool>,
 }
 
 impl Default for App {
@@ -51,6 +66,8 @@ impl Default for App {
 			cpu_sim_subscription_action_sender: sender,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
 			asm_output,
+			new_breakpoint_address_input: String::new(),
+			breakpoints: HashMap::new(),
 		}
 	}
 }
@@ -62,6 +79,10 @@ enum Message {
 	Step,
 	AsmSourceCodeChanged(text_editor::Action),
 	UpdateCpuState,
+	ChangeNewBreakpointAddressInput(String),
+	AddBreakpoint,
+	RemoveBreakpoint(u16),
+	SetBreakpointEnabled(u16, bool),
 }
 
 impl App {
@@ -105,6 +126,34 @@ impl App {
 			Message::UpdateCpuState => {
 				self.cpu.update();
 			}
+			Message::ChangeNewBreakpointAddressInput(new_breakpoint_address_input) => {
+				self.new_breakpoint_address_input = new_breakpoint_address_input;
+			}
+			Message::AddBreakpoint => {
+				let parsed_address =
+					if let Some(s) = self.new_breakpoint_address_input.strip_prefix("0x") {
+						u16::from_str_radix(s, 16)
+					} else {
+						self.new_breakpoint_address_input.parse::<u16>()
+					};
+				if let Ok(address) = parsed_address {
+					self.breakpoints.insert(address, true);
+					self.send_cpu_sim_subscription_action(CpuSimMessage::AddBreakpoint(address));
+				}
+				self.new_breakpoint_address_input.clear();
+			}
+			Message::RemoveBreakpoint(address) => {
+				self.breakpoints.remove(&address);
+				self.send_cpu_sim_subscription_action(CpuSimMessage::RemoveBreakpoint(address));
+			}
+			Message::SetBreakpointEnabled(address, enabled) => {
+				self.breakpoints.insert(address, enabled);
+				if enabled {
+					self.send_cpu_sim_subscription_action(CpuSimMessage::AddBreakpoint(address));
+				} else {
+					self.send_cpu_sim_subscription_action(CpuSimMessage::RemoveBreakpoint(address));
+				}
+			}
 		}
 	}
 
@@ -147,8 +196,128 @@ impl App {
 		.into()
 	}
 
+	fn instructions_pane(&self, cpu: &Cpu) -> Element<Message> {
+		column![
+			text("Instructions:"),
+			container(match &self.asm_output {
+				Ok(asm_instructions) => {
+					let program_counter = cpu.get_program_counter();
+
+					scrollable(
+						Column::with_children(
+							asm_instructions
+								.iter()
+								.enumerate()
+								.map(|(i, instr)| {
+									text(format!("{i:#04x}: {instr}"))
+										.font(Font::MONOSPACE)
+										.color_maybe(if program_counter == i as u16 {
+											Some(Color::from_rgb(1.0, 0.0, 0.0))
+										} else {
+											None
+										})
+										.into()
+								})
+								.collect::<Vec<_>>(),
+						)
+						.spacing(10)
+						.padding(10)
+						.width(Fill),
+					)
+					.into()
+				}
+				Err(e) => Element::new(container(text!("Error: {e:?}").width(Fill)).padding(10)),
+			})
+			.style(panel_style),
+		]
+		.width(FillPortion(2))
+		.spacing(5)
+		.into()
+	}
+
+	fn breakpoints_pane(&self, breakpoint_hit: Option<u16>) -> Element<Message> {
+		column![
+			text("Breakpoints:"),
+			text_input("breakpoint address", &self.new_breakpoint_address_input)
+				.on_input(Message::ChangeNewBreakpointAddressInput)
+				.on_submit(Message::AddBreakpoint),
+			container(scrollable(if self.breakpoints.is_empty() {
+				Element::new(
+					container(text("No breakpoints set"))
+						.padding(5.0)
+						.width(Fill),
+				)
+			} else {
+				Column::with_children(self.breakpoints.iter().map(
+					|(breakpoint_address, enabled)| {
+						let this_breakpoint_was_hit = breakpoint_hit
+							.map(|addr| addr == *breakpoint_address)
+							.unwrap_or(false);
+
+						row![
+							checkbox(format!("{breakpoint_address:#04x}"), *enabled)
+								.font(Font::MONOSPACE)
+								.on_toggle(move |enabled| {
+									Message::SetBreakpointEnabled(*breakpoint_address, enabled)
+								})
+								.style(move |t, s| checkbox::Style {
+									text_color: if this_breakpoint_was_hit {
+										Some(Color::from_rgb(1.0, 0.0, 0.0))
+									} else {
+										None
+									},
+									..checkbox::primary(t, s)
+								}),
+							Space::new(Fill, 0.0),
+							button(text(icon_to_string(RequiredIcons::X)).font(REQUIRED_FONT))
+								.padding(Padding::default().left(2.5).right(2.5))
+								.on_press(Message::RemoveBreakpoint(*breakpoint_address))
+						]
+						.align_y(Vertical::Center)
+						.into()
+					},
+				))
+				.spacing(10)
+				.padding(10)
+				.width(Fill)
+				.into()
+			}))
+			.style(panel_style),
+		]
+		.width(FillPortion(1))
+		.spacing(5)
+		.into()
+	}
+
+	fn registers_pane(&self, cpu: &Cpu) -> Element<Message> {
+		column![
+			text("Registers:"),
+			container(scrollable(
+				Column::with_children(Register::ALL.iter().map(|reg| {
+					let value = cpu.read_register(*reg);
+
+					text(format!("{reg} = {value:#04x}"))
+						.font(Font::MONOSPACE)
+						.into()
+				}))
+				.spacing(10)
+				.padding(10)
+				.width(Fill)
+			))
+			.style(panel_style)
+		]
+		.width(FillPortion(1))
+		.spacing(5)
+		.into()
+	}
+
 	fn simulation_pane(&self) -> Element<Message> {
 		let cpu = self.cpu.peek_output_buffer();
+
+		let breakpoint_hit = self
+			.breakpoints
+			.get_key_value(&cpu.get_program_counter())
+			.and_then(|(addr, enabled)| if *enabled { Some(*addr) } else { None });
 
 		column![
 			row![
@@ -167,58 +336,12 @@ impl App {
 			.align_y(Vertical::Center)
 			.spacing(10),
 			row![
+				self.instructions_pane(cpu),
 				column![
-					text("Instructions:"),
-					container(match &self.asm_output {
-						Ok(asm_instructions) => {
-							let program_counter = cpu.get_program_counter();
-
-							scrollable(
-								Column::with_children(
-									asm_instructions
-										.iter()
-										.enumerate()
-										.map(|(i, instr)| {
-											text(format!("{i:#04x}: {instr}"))
-												.font(Font::MONOSPACE)
-												.color_maybe(if program_counter == i as u16 {
-													Some(Color::from_rgb(1.0, 0.0, 0.0))
-												} else {
-													None
-												})
-												.into()
-										})
-										.collect::<Vec<_>>(),
-								)
-								.spacing(10)
-								.padding(10)
-								.width(Fill),
-							)
-							.into()
-						}
-						Err(e) =>
-							Element::new(container(text!("Error: {e:?}").width(Fill)).padding(10)),
-					})
-					.style(panel_style),
+					self.breakpoints_pane(breakpoint_hit),
+					self.registers_pane(cpu),
 				]
-				.spacing(5),
-				column![
-					text("Registers:"),
-					container(scrollable(
-						Column::with_children(Register::ALL.iter().map(|reg| {
-							let value = cpu.read_register(*reg);
-
-							text(format!("{reg} = {value:#04x}"))
-								.font(Font::MONOSPACE)
-								.into()
-						}))
-						.spacing(10)
-						.padding(10)
-						.width(Fill)
-					))
-					.style(panel_style)
-				]
-				.spacing(5),
+				.spacing(20)
 			]
 			.spacing(20)
 			.height(FillPortion(1))
@@ -241,18 +364,24 @@ fn cpu_simulation_thread(
 			const BULK_STEP_COUNT: usize = 1_000_000;
 			for _ in 0..BULK_STEP_COUNT {
 				match cpu.step() {
-					Ok(continue_execution) => {
-						if !continue_execution {
+					Ok(cpu_status) => match cpu_status {
+						CpuStatus::Normal => {}
+						CpuStatus::BreakpointHit => {
+							break;
+						}
+						CpuStatus::ProgramFinished => {
 							println!("Program finished");
 							break;
 						}
-					}
+					},
 					Err(e) => {
 						eprintln!("failed to step cpu: {e}");
 					}
 				}
 			}
 		}
+
+		writable_cpu_buffer.write(cpu.clone());
 
 		loop {
 			match receiver.try_recv() {
@@ -261,17 +390,24 @@ fn cpu_simulation_thread(
 						cpu = Cpu::new(program);
 					}
 					CpuSimMessage::Step => match cpu.step() {
-						Ok(continue_execution) => {
-							if !continue_execution {
+						Ok(cpu_status) => match cpu_status {
+							CpuStatus::Normal | CpuStatus::BreakpointHit => {}
+							CpuStatus::ProgramFinished => {
 								println!("Program finished");
 							}
-						}
+						},
 						Err(e) => {
 							eprintln!("failed to step cpu: {e}");
 						}
 					},
 					CpuSimMessage::SetSimulating(simulating) => {
 						simulate_cpu = simulating;
+					}
+					CpuSimMessage::AddBreakpoint(breakpoint_address) => {
+						cpu.add_breakpoint(breakpoint_address);
+					}
+					CpuSimMessage::RemoveBreakpoint(breakpoint_address) => {
+						cpu.remove_breakpoint(breakpoint_address);
 					}
 				},
 				Err(e) => match e {
@@ -280,8 +416,6 @@ fn cpu_simulation_thread(
 				},
 			}
 		}
-
-		writable_cpu_buffer.write(cpu.clone());
 	}
 }
 
@@ -359,5 +493,6 @@ fn background_style(_theme: &Theme) -> container::Style {
 fn main() -> iced::Result {
 	iced::application(App::title, App::update, App::view)
 		.subscription(App::subscription)
+		.font(REQUIRED_FONT_BYTES)
 		.run()
 }
