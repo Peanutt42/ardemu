@@ -1,7 +1,7 @@
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use self_rust_tokenize::SelfRustTokenize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SelfRustTokenize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub struct Imm16(pub u16);
 
 impl From<u16> for Imm16 {
@@ -16,7 +16,7 @@ impl std::fmt::Display for Imm16 {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SelfRustTokenize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub enum HlOrImm16 {
 	Hl,
 	Imm16(Imm16),
@@ -43,7 +43,7 @@ impl std::fmt::Display for HlOrImm16 {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SelfRustTokenize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub enum RegisterOrImm8 {
 	Register(Register),
 	Imm8(u8),
@@ -84,6 +84,7 @@ impl std::fmt::Display for RegisterOrImm8 {
 	PartialEq,
 	Eq,
 	PartialOrd,
+	Hash,
 	Ord,
 	IntoPrimitive,
 	TryFromPrimitive,

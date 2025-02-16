@@ -4,40 +4,54 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
+use std::hash::{Hash, Hasher};
+
 use ardemu_core::{parse_asm, AsmParseError, Cpu, Instruction, Register};
 use iced::{
 	alignment::Vertical,
 	border::rounded,
-	time,
-	widget::{
-		button, button::Status, column, container, responsive, row, scrollable, text, text_editor,
-		text_input, Column,
-	},
+	futures::SinkExt,
+	widget::{button, column, container, responsive, row, scrollable, text, text_editor, Column},
 	Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
 	Subscription, Theme,
 };
 
+#[derive(Debug, Clone)]
+enum CpuSimSubscriptionAction {
+	ResetAndLoadProgram(Vec<Instruction>),
+	SetSimulating(bool),
+	Step,
+}
+
+#[derive(Debug, Clone)]
+enum CpuSimSubscriptionMessage {
+	ActionSender(std::sync::mpsc::Sender<CpuSimSubscriptionAction>),
+	NewCpuState(Box<Cpu>),
+}
+
 #[derive(Debug)]
 struct App {
 	cpu: Cpu,
 	simulate_cpu: bool,
-	simulation_frequency: u64,
+	cpu_sim_subscription_action_sender: Option<std::sync::mpsc::Sender<CpuSimSubscriptionAction>>,
 	asm_source_code_text_content: text_editor::Content,
 	asm_output: Result<Vec<Instruction>, AsmParseError>,
 }
 
 impl Default for App {
 	fn default() -> Self {
-		let asm_source_code = include_str!("../../src/fib.asm").to_string();
+		let asm_source_code = include_str!("count_down.asm").to_string();
 		let asm_output = parse_asm(&asm_source_code);
+		let cpu = match asm_output.as_ref() {
+			Ok(program) => Cpu::new(program.clone()),
+			Err(_) => Cpu::default(),
+		};
+
 		Self {
-			cpu: match asm_output.as_ref() {
-				Ok(program) => Cpu::new(program.as_slice()),
-				Err(_) => Cpu::default(),
-			},
+			cpu,
 			simulate_cpu: false,
-			simulation_frequency: 10,
+			cpu_sim_subscription_action_sender: None,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
 			asm_output,
 		}
@@ -48,10 +62,9 @@ impl Default for App {
 enum Message {
 	ResetCpu,
 	SimulateCpu(bool),
-	SetSimulationFrequency(u64),
-	InvalidSimulationFrequencyInput,
 	Step,
 	AsmSourceCodeChanged(text_editor::Action),
+	CpuSimSubscription(CpuSimSubscriptionMessage),
 }
 
 impl App {
@@ -60,48 +73,53 @@ impl App {
 	}
 
 	fn subscription(&self) -> Subscription<Message> {
-		if self.simulate_cpu {
-			time::every(std::time::Duration::from_secs_f64(
-				1.0 / self.simulation_frequency as f64,
-			))
-			.map(|_| Message::Step)
-		} else {
-			Subscription::none()
+		match &self.asm_output {
+			Ok(program) => cpu_sim_subscription(program.clone()).map(Message::CpuSimSubscription),
+			Err(_) => Subscription::none(),
+		}
+	}
+
+	fn send_cpu_sim_subscription_action(&mut self, action: CpuSimSubscriptionAction) {
+		match &mut self.cpu_sim_subscription_action_sender {
+			Some(sender) => {
+				if let Err(e) = sender.send(action) {
+					eprintln!("Could not send CPU sim subscription action: {e}");
+				};
+			}
+			None => eprintln!("Could not send CPU sim subscription action: {action:?}"),
 		}
 	}
 
 	fn update(&mut self, message: Message) {
 		match message {
-			Message::InvalidSimulationFrequencyInput => {}
-			Message::SetSimulationFrequency(frequency) => {
-				self.simulation_frequency = frequency;
-			}
 			Message::SimulateCpu(simulate_cpu) => {
 				self.simulate_cpu = simulate_cpu;
+				self.send_cpu_sim_subscription_action(CpuSimSubscriptionAction::SetSimulating(
+					simulate_cpu,
+				));
 			}
 			Message::ResetCpu => {
-				self.cpu.reset();
+				self.send_cpu_sim_subscription_action(
+					CpuSimSubscriptionAction::ResetAndLoadProgram(
+						self.asm_output.clone().ok().unwrap_or_default(),
+					),
+				);
 			}
-			Message::Step => match self.cpu.step() {
-				Ok(continue_execution) => {
-					if !continue_execution {
-						println!("Program finished");
-					}
-				}
-				Err(e) => {
-					eprintln!("failed to step cpu: {e}");
-				}
-			},
+			Message::Step => self.send_cpu_sim_subscription_action(CpuSimSubscriptionAction::Step),
 			Message::AsmSourceCodeChanged(action) => {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
 				if is_edit {
 					self.asm_output = parse_asm(&self.asm_source_code_text_content.text());
-					if let Ok(instructions) = self.asm_output.as_ref() {
-						self.cpu = Cpu::new(instructions.as_slice());
-					}
+					self.update(Message::ResetCpu);
 				}
 			}
+			Message::CpuSimSubscription(message) => match message {
+				CpuSimSubscriptionMessage::NewCpuState(cpu) => self.cpu = *cpu,
+				CpuSimSubscriptionMessage::ActionSender(action_sender) => {
+					self.cpu_sim_subscription_action_sender = Some(action_sender)
+				}
+			},
 		}
 	}
 
@@ -158,13 +176,6 @@ impl App {
 				.style(button_style)
 				.on_press(Message::SimulateCpu(!self.simulate_cpu)),
 				button("Step").style(button_style).on_press(Message::Step),
-				text("Sim Speed:"),
-				text_input("100", &self.simulation_frequency.to_string()).on_input(|input| {
-					match input.parse::<u64>() {
-						Ok(frequency) => Message::SetSimulationFrequency(frequency),
-						Err(_) => Message::InvalidSimulationFrequencyInput,
-					}
-				}),
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),
@@ -231,6 +242,81 @@ impl App {
 	}
 }
 
+fn cpu_sim_subscription(program: Vec<Instruction>) -> Subscription<CpuSimSubscriptionMessage> {
+	let mut hasher = std::hash::DefaultHasher::new();
+	program.hash(&mut hasher);
+	let id = hasher.finish();
+	Subscription::run_with_id(id, cpu_sim_subscription_stream(program))
+}
+
+fn cpu_sim_subscription_stream(
+	program: Vec<Instruction>,
+) -> impl iced::futures::Stream<Item = CpuSimSubscriptionMessage> {
+	iced::stream::channel(1, move |mut output| async move {
+		let mut cpu = Cpu::new(program);
+		let mut simulate_cpu = false;
+		let (sender, receiver) = std::sync::mpsc::channel();
+
+		if output
+			.send(CpuSimSubscriptionMessage::ActionSender(sender))
+			.await
+			.is_err()
+		{
+			return;
+		}
+
+		loop {
+			if simulate_cpu {
+				const BULK_STEP_COUNT: usize = 100_000;
+
+				for _ in 0..BULK_STEP_COUNT {
+					match cpu.step() {
+						Ok(continue_execution) => {
+							if !continue_execution {
+								println!("Program finished");
+							}
+						}
+						Err(e) => {
+							eprintln!("failed to step cpu: {e}");
+						}
+					}
+				}
+			}
+
+			for action in receiver.try_iter() {
+				match action {
+					CpuSimSubscriptionAction::ResetAndLoadProgram(program) => {
+						cpu = Cpu::new(program);
+					}
+					CpuSimSubscriptionAction::Step => match cpu.step() {
+						Ok(continue_execution) => {
+							if !continue_execution {
+								println!("Program finished");
+							}
+						}
+						Err(e) => {
+							eprintln!("failed to step cpu: {e}");
+						}
+					},
+					CpuSimSubscriptionAction::SetSimulating(simulating) => {
+						simulate_cpu = simulating;
+					}
+				}
+			}
+
+			if output
+				.send(CpuSimSubscriptionMessage::NewCpuState(Box::new(
+					cpu.clone(),
+				)))
+				.await
+				.is_err()
+			{
+				return;
+			}
+		}
+	})
+}
+
 fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
 	let palette = theme.extended_palette();
 
@@ -271,10 +357,10 @@ fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_editor:
 	}
 }
 
-fn button_style(theme: &Theme, status: Status) -> button::Style {
+fn button_style(theme: &Theme, status: button::Status) -> button::Style {
 	let color_pair = match status {
-		Status::Active => theme.extended_palette().primary.strong,
-		Status::Hovered | Status::Pressed | Status::Disabled => {
+		button::Status::Active => theme.extended_palette().primary.strong,
+		button::Status::Hovered | button::Status::Pressed | button::Status::Disabled => {
 			theme.extended_palette().primary.weak
 		}
 	};

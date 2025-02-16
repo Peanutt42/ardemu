@@ -5,7 +5,7 @@ use crate::{
 use ardemu_display_instr_macro::DisplayInstruction;
 use self_rust_tokenize::SelfRustTokenize;
 
-#[derive(Debug, DisplayInstruction, Clone, Copy, PartialEq, Eq, SelfRustTokenize)]
+#[derive(Debug, DisplayInstruction, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub enum Instruction {
 	/// moves value into register
 	Mw {
