@@ -4,27 +4,23 @@ mw c, 255
 mw d, 255
 
 loop_a:
-	sub a, 1
+	dec a
 	lda loop_a
 	jnz a
-	lda loop_b
-	jnz 1
+	jmp loop_b
 
 loop_b:
-	sub b, 1
+	dec b
 	lda loop_a
 	jnz b
-	lda loop_c
-	jnz 1
+	jmp loop_c
 
 loop_c:
-	sub c, 1
+	dec c
 	lda loop_b
 	jnz c
-	lda loop_d
-	jnz 1
+	jmp loop_d
 
 loop_d:
-	sub d, 1
-	lda loop_c
-	jnz 1
+	dec d
+	jmp loop_c
