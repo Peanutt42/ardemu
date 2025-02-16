@@ -4,37 +4,30 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
-use std::hash::{Hash, Hasher};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 use ardemu_core::{parse_asm, AsmParseError, Cpu, Instruction, Register};
 use iced::{
 	alignment::Vertical,
 	border::rounded,
-	futures::SinkExt,
 	widget::{button, column, container, responsive, row, scrollable, text, text_editor, Column},
-	Border, Color, Element, Font,
+	window, Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
 	Subscription, Theme,
 };
 
 #[derive(Debug, Clone)]
-enum CpuSimSubscriptionAction {
+enum CpuSimMessage {
 	ResetAndLoadProgram(Vec<Instruction>),
 	SetSimulating(bool),
 	Step,
 }
 
-#[derive(Debug, Clone)]
-enum CpuSimSubscriptionMessage {
-	ActionSender(std::sync::mpsc::Sender<CpuSimSubscriptionAction>),
-	NewCpuState(Box<Cpu>),
-}
-
 #[derive(Debug)]
 struct App {
-	cpu: Cpu,
 	simulate_cpu: bool,
-	cpu_sim_subscription_action_sender: Option<std::sync::mpsc::Sender<CpuSimSubscriptionAction>>,
+	cpu: triple_buffer::Output<Cpu>,
+	cpu_sim_subscription_action_sender: std::sync::mpsc::Sender<CpuSimMessage>,
 	asm_source_code_text_content: text_editor::Content,
 	asm_output: Result<Vec<Instruction>, AsmParseError>,
 }
@@ -47,11 +40,15 @@ impl Default for App {
 			Ok(program) => Cpu::new(program.clone()),
 			Err(_) => Cpu::default(),
 		};
+		let (writable_cpu_buffer, readable_cpu_buffer) = triple_buffer::triple_buffer(&cpu);
+		let (sender, receiver) = std::sync::mpsc::channel();
+
+		std::thread::spawn(|| cpu_simulation_thread(cpu, receiver, writable_cpu_buffer));
 
 		Self {
-			cpu,
+			cpu: readable_cpu_buffer,
 			simulate_cpu: false,
-			cpu_sim_subscription_action_sender: None,
+			cpu_sim_subscription_action_sender: sender,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
 			asm_output,
 		}
@@ -64,7 +61,7 @@ enum Message {
 	SimulateCpu(bool),
 	Step,
 	AsmSourceCodeChanged(text_editor::Action),
-	CpuSimSubscription(CpuSimSubscriptionMessage),
+	UpdateCpuState,
 }
 
 impl App {
@@ -74,38 +71,29 @@ impl App {
 
 	fn subscription(&self) -> Subscription<Message> {
 		match &self.asm_output {
-			Ok(program) => cpu_sim_subscription(program.clone()).map(Message::CpuSimSubscription),
+			Ok(_) => window::frames().map(|_| Message::UpdateCpuState),
 			Err(_) => Subscription::none(),
 		}
 	}
 
-	fn send_cpu_sim_subscription_action(&mut self, action: CpuSimSubscriptionAction) {
-		match &mut self.cpu_sim_subscription_action_sender {
-			Some(sender) => {
-				if let Err(e) = sender.send(action) {
-					eprintln!("Could not send CPU sim subscription action: {e}");
-				};
-			}
-			None => eprintln!("Could not send CPU sim subscription action: {action:?}"),
-		}
+	fn send_cpu_sim_subscription_action(&mut self, action: CpuSimMessage) {
+		if let Err(e) = self.cpu_sim_subscription_action_sender.send(action) {
+			eprintln!("Could not send CPU sim subscription action: {e}");
+		};
 	}
 
 	fn update(&mut self, message: Message) {
 		match message {
 			Message::SimulateCpu(simulate_cpu) => {
 				self.simulate_cpu = simulate_cpu;
-				self.send_cpu_sim_subscription_action(CpuSimSubscriptionAction::SetSimulating(
-					simulate_cpu,
-				));
+				self.send_cpu_sim_subscription_action(CpuSimMessage::SetSimulating(simulate_cpu));
 			}
 			Message::ResetCpu => {
-				self.send_cpu_sim_subscription_action(
-					CpuSimSubscriptionAction::ResetAndLoadProgram(
-						self.asm_output.clone().ok().unwrap_or_default(),
-					),
-				);
+				self.send_cpu_sim_subscription_action(CpuSimMessage::ResetAndLoadProgram(
+					self.asm_output.clone().ok().unwrap_or_default(),
+				));
 			}
-			Message::Step => self.send_cpu_sim_subscription_action(CpuSimSubscriptionAction::Step),
+			Message::Step => self.send_cpu_sim_subscription_action(CpuSimMessage::Step),
 			Message::AsmSourceCodeChanged(action) => {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
@@ -114,12 +102,9 @@ impl App {
 					self.update(Message::ResetCpu);
 				}
 			}
-			Message::CpuSimSubscription(message) => match message {
-				CpuSimSubscriptionMessage::NewCpuState(cpu) => self.cpu = *cpu,
-				CpuSimSubscriptionMessage::ActionSender(action_sender) => {
-					self.cpu_sim_subscription_action_sender = Some(action_sender)
-				}
-			},
+			Message::UpdateCpuState => {
+				self.cpu.update();
+			}
 		}
 	}
 
@@ -163,6 +148,8 @@ impl App {
 	}
 
 	fn simulation_pane(&self) -> Element<Message> {
+		let cpu = self.cpu.peek_output_buffer();
+
 		column![
 			row![
 				button("Reset CPU")
@@ -184,7 +171,7 @@ impl App {
 					text("Instructions:"),
 					container(match &self.asm_output {
 						Ok(asm_instructions) => {
-							let program_counter = self.cpu.get_program_counter();
+							let program_counter = cpu.get_program_counter();
 
 							scrollable(
 								Column::with_children(
@@ -219,7 +206,7 @@ impl App {
 					text("Registers:"),
 					container(scrollable(
 						Column::with_children(Register::ALL.iter().map(|reg| {
-							let value = self.cpu.read_register(*reg);
+							let value = cpu.read_register(*reg);
 
 							text(format!("{reg} = {value:#04x}"))
 								.font(Font::MONOSPACE)
@@ -242,53 +229,38 @@ impl App {
 	}
 }
 
-fn cpu_sim_subscription(program: Vec<Instruction>) -> Subscription<CpuSimSubscriptionMessage> {
-	let mut hasher = std::hash::DefaultHasher::new();
-	program.hash(&mut hasher);
-	let id = hasher.finish();
-	Subscription::run_with_id(id, cpu_sim_subscription_stream(program))
-}
+fn cpu_simulation_thread(
+	mut cpu: Cpu,
+	receiver: Receiver<CpuSimMessage>,
+	mut writable_cpu_buffer: triple_buffer::Input<Cpu>,
+) {
+	let mut simulate_cpu = false;
 
-fn cpu_sim_subscription_stream(
-	program: Vec<Instruction>,
-) -> impl iced::futures::Stream<Item = CpuSimSubscriptionMessage> {
-	iced::stream::channel(1, move |mut output| async move {
-		let mut cpu = Cpu::new(program);
-		let mut simulate_cpu = false;
-		let (sender, receiver) = std::sync::mpsc::channel();
-
-		if output
-			.send(CpuSimSubscriptionMessage::ActionSender(sender))
-			.await
-			.is_err()
-		{
-			return;
-		}
-
-		loop {
-			if simulate_cpu {
-				const BULK_STEP_COUNT: usize = 100_000;
-
-				for _ in 0..BULK_STEP_COUNT {
-					match cpu.step() {
-						Ok(continue_execution) => {
-							if !continue_execution {
-								println!("Program finished");
-							}
+	loop {
+		if simulate_cpu {
+			const BULK_STEP_COUNT: usize = 1_000_000;
+			for _ in 0..BULK_STEP_COUNT {
+				match cpu.step() {
+					Ok(continue_execution) => {
+						if !continue_execution {
+							println!("Program finished");
+							break;
 						}
-						Err(e) => {
-							eprintln!("failed to step cpu: {e}");
-						}
+					}
+					Err(e) => {
+						eprintln!("failed to step cpu: {e}");
 					}
 				}
 			}
+		}
 
-			for action in receiver.try_iter() {
-				match action {
-					CpuSimSubscriptionAction::ResetAndLoadProgram(program) => {
+		loop {
+			match receiver.try_recv() {
+				Ok(action) => match action {
+					CpuSimMessage::ResetAndLoadProgram(program) => {
 						cpu = Cpu::new(program);
 					}
-					CpuSimSubscriptionAction::Step => match cpu.step() {
+					CpuSimMessage::Step => match cpu.step() {
 						Ok(continue_execution) => {
 							if !continue_execution {
 								println!("Program finished");
@@ -298,23 +270,19 @@ fn cpu_sim_subscription_stream(
 							eprintln!("failed to step cpu: {e}");
 						}
 					},
-					CpuSimSubscriptionAction::SetSimulating(simulating) => {
+					CpuSimMessage::SetSimulating(simulating) => {
 						simulate_cpu = simulating;
 					}
-				}
-			}
-
-			if output
-				.send(CpuSimSubscriptionMessage::NewCpuState(Box::new(
-					cpu.clone(),
-				)))
-				.await
-				.is_err()
-			{
-				return;
+				},
+				Err(e) => match e {
+					TryRecvError::Empty => break,
+					TryRecvError::Disconnected => return,
+				},
 			}
 		}
-	})
+
+		writable_cpu_buffer.write(cpu.clone());
+	}
 }
 
 fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
