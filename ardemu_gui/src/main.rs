@@ -13,7 +13,7 @@ use iced::{
 	widget::{button, column, container, responsive, row, scrollable, text, text_editor, Column},
 	window, Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
-	Subscription, Theme,
+	Padding, Subscription, Theme,
 };
 
 #[derive(Debug, Clone)]
@@ -29,7 +29,7 @@ enum CpuSimMessage {
 struct App {
 	simulate_cpu: bool,
 	cpu: triple_buffer::Output<Cpu>,
-	cpu_sim_subscription_action_sender: std::sync::mpsc::Sender<CpuSimMessage>,
+	cpu_sim_message_sender: std::sync::mpsc::Sender<CpuSimMessage>,
 	asm_source_code_text_content: text_editor::Content,
 	asm_output: Result<Vec<Instruction>, AsmParseError>,
 }
@@ -50,7 +50,7 @@ impl Default for App {
 		Self {
 			cpu: readable_cpu_buffer,
 			simulate_cpu: false,
-			cpu_sim_subscription_action_sender: sender,
+			cpu_sim_message_sender: sender,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
 			asm_output,
 		}
@@ -76,13 +76,13 @@ impl App {
 	fn subscription(&self) -> Subscription<Message> {
 		match &self.asm_output {
 			Ok(_) => window::frames().map(|_| Message::UpdateCpuState),
-			Err(_) => Subscription::none(),
+			_ => Subscription::none(),
 		}
 	}
 
-	fn send_cpu_sim_subscription_action(&mut self, action: CpuSimMessage) {
-		if let Err(e) = self.cpu_sim_subscription_action_sender.send(action) {
-			eprintln!("Could not send CPU sim subscription action: {e}");
+	fn send_cpu_sim_message(&mut self, message: CpuSimMessage) {
+		if let Err(e) = self.cpu_sim_message_sender.send(message) {
+			eprintln!("Could not send CPU sim message: {e}");
 		};
 	}
 
@@ -90,14 +90,14 @@ impl App {
 		match message {
 			Message::SimulateCpu(simulate_cpu) => {
 				self.simulate_cpu = simulate_cpu;
-				self.send_cpu_sim_subscription_action(CpuSimMessage::SetSimulating(simulate_cpu));
+				self.send_cpu_sim_message(CpuSimMessage::SetSimulating(simulate_cpu));
 			}
 			Message::ResetCpu => {
-				self.send_cpu_sim_subscription_action(CpuSimMessage::ResetAndLoadProgram(
+				self.send_cpu_sim_message(CpuSimMessage::ResetAndLoadProgram(
 					self.asm_output.clone().ok().unwrap_or_default(),
 				));
 			}
-			Message::Step => self.send_cpu_sim_subscription_action(CpuSimMessage::Step),
+			Message::Step => self.send_cpu_sim_message(CpuSimMessage::Step),
 			Message::AsmSourceCodeChanged(action) => {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
@@ -110,10 +110,10 @@ impl App {
 				self.cpu.update();
 			}
 			Message::AddBreakpoint(address) => {
-				self.send_cpu_sim_subscription_action(CpuSimMessage::AddBreakpoint(address));
+				self.send_cpu_sim_message(CpuSimMessage::AddBreakpoint(address));
 			}
 			Message::RemoveBreakpoint(address) => {
-				self.send_cpu_sim_subscription_action(CpuSimMessage::RemoveBreakpoint(address));
+				self.send_cpu_sim_message(CpuSimMessage::RemoveBreakpoint(address));
 			}
 		}
 	}
@@ -188,6 +188,7 @@ impl App {
 													hidden_secondary_button_style(t, s)
 												}
 											})
+											.padding(Padding::new(2.5).left(5.0).right(5.0))
 											.on_press(
 												if cpu.get_breakpoints().contains(&address) {
 													Message::RemoveBreakpoint(address)
@@ -204,12 +205,12 @@ impl App {
 										)
 									]
 									.align_y(Vertical::Center)
-									.spacing(10)
+									.spacing(15)
 									.into()
 								})
 								.collect::<Vec<_>>(),
 						)
-						.spacing(10)
+						.spacing(5)
 						.padding(10)
 						.width(Fill),
 					)
@@ -307,8 +308,10 @@ fn cpu_simulation_thread(
 		writable_cpu_buffer.write(cpu.clone());
 
 		loop {
-			match receiver.try_recv() {
-				Ok(action) => match action {
+			let simulate_cpu_copy = simulate_cpu;
+
+			let mut handle_message = |message: CpuSimMessage| {
+				match message {
 					CpuSimMessage::ResetAndLoadProgram(program) => {
 						cpu = Cpu::new(program);
 					}
@@ -332,11 +335,24 @@ fn cpu_simulation_thread(
 					CpuSimMessage::RemoveBreakpoint(breakpoint_address) => {
 						cpu.remove_breakpoint(breakpoint_address);
 					}
-				},
-				Err(e) => match e {
-					TryRecvError::Empty => break,
-					TryRecvError::Disconnected => return,
-				},
+				}
+
+				writable_cpu_buffer.write(cpu.clone());
+			};
+
+			if simulate_cpu_copy {
+				match receiver.try_recv() {
+					Ok(message) => handle_message(message),
+					Err(e) => match e {
+						TryRecvError::Empty => break,
+						TryRecvError::Disconnected => return,
+					},
+				}
+			} else {
+				match receiver.recv() {
+					Ok(message) => handle_message(message),
+					Err(_) => return,
+				}
 			}
 		}
 	}
