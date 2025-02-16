@@ -4,26 +4,16 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
-use std::{
-	collections::HashMap,
-	sync::mpsc::{Receiver, TryRecvError},
-};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 use ardemu_core::{parse_asm, AsmParseError, Cpu, CpuStatus, Instruction, Register};
 use iced::{
 	alignment::Vertical,
 	border::rounded,
-	widget::{
-		button, checkbox, column, container, responsive, row, scrollable, text, text_editor,
-		text_input, Column, Space,
-	},
+	widget::{button, column, container, responsive, row, scrollable, text, text_editor, Column},
 	window, Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
-	Padding, Subscription, Theme,
-};
-use iced_fonts::{
-	required::{icon_to_string, RequiredIcons},
-	REQUIRED_FONT, REQUIRED_FONT_BYTES,
+	Subscription, Theme,
 };
 
 #[derive(Debug, Clone)]
@@ -42,9 +32,6 @@ struct App {
 	cpu_sim_subscription_action_sender: std::sync::mpsc::Sender<CpuSimMessage>,
 	asm_source_code_text_content: text_editor::Content,
 	asm_output: Result<Vec<Instruction>, AsmParseError>,
-	new_breakpoint_address_input: String,
-	/// map of breakpoints and their enabled status
-	breakpoints: HashMap<u16, bool>,
 }
 
 impl Default for App {
@@ -66,8 +53,6 @@ impl Default for App {
 			cpu_sim_subscription_action_sender: sender,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
 			asm_output,
-			new_breakpoint_address_input: String::new(),
-			breakpoints: HashMap::new(),
 		}
 	}
 }
@@ -79,10 +64,8 @@ enum Message {
 	Step,
 	AsmSourceCodeChanged(text_editor::Action),
 	UpdateCpuState,
-	ChangeNewBreakpointAddressInput(String),
-	AddBreakpoint,
+	AddBreakpoint(u16),
 	RemoveBreakpoint(u16),
-	SetBreakpointEnabled(u16, bool),
 }
 
 impl App {
@@ -126,33 +109,11 @@ impl App {
 			Message::UpdateCpuState => {
 				self.cpu.update();
 			}
-			Message::ChangeNewBreakpointAddressInput(new_breakpoint_address_input) => {
-				self.new_breakpoint_address_input = new_breakpoint_address_input;
-			}
-			Message::AddBreakpoint => {
-				let parsed_address =
-					if let Some(s) = self.new_breakpoint_address_input.strip_prefix("0x") {
-						u16::from_str_radix(s, 16)
-					} else {
-						self.new_breakpoint_address_input.parse::<u16>()
-					};
-				if let Ok(address) = parsed_address {
-					self.breakpoints.insert(address, true);
-					self.send_cpu_sim_subscription_action(CpuSimMessage::AddBreakpoint(address));
-				}
-				self.new_breakpoint_address_input.clear();
+			Message::AddBreakpoint(address) => {
+				self.send_cpu_sim_subscription_action(CpuSimMessage::AddBreakpoint(address));
 			}
 			Message::RemoveBreakpoint(address) => {
-				self.breakpoints.remove(&address);
 				self.send_cpu_sim_subscription_action(CpuSimMessage::RemoveBreakpoint(address));
-			}
-			Message::SetBreakpointEnabled(address, enabled) => {
-				self.breakpoints.insert(address, enabled);
-				if enabled {
-					self.send_cpu_sim_subscription_action(CpuSimMessage::AddBreakpoint(address));
-				} else {
-					self.send_cpu_sim_subscription_action(CpuSimMessage::RemoveBreakpoint(address));
-				}
 			}
 		}
 	}
@@ -197,26 +158,54 @@ impl App {
 	}
 
 	fn instructions_pane(&self, cpu: &Cpu) -> Element<Message> {
+		let program_counter = cpu.get_program_counter();
+
 		column![
 			text("Instructions:"),
 			container(match &self.asm_output {
 				Ok(asm_instructions) => {
-					let program_counter = cpu.get_program_counter();
-
 					scrollable(
 						Column::with_children(
 							asm_instructions
 								.iter()
 								.enumerate()
 								.map(|(i, instr)| {
-									text(format!("{i:#04x}: {instr}"))
-										.font(Font::MONOSPACE)
-										.color_maybe(if program_counter == i as u16 {
-											Some(Color::from_rgb(1.0, 0.0, 0.0))
-										} else {
-											None
-										})
-										.into()
+									let address = i as u16;
+									let breakpoint_set_here =
+										cpu.get_breakpoints().contains(&address);
+									let instr_currently_executing = program_counter == address;
+
+									row![
+										button(text!("{address:#04x}:").font(Font::MONOSPACE))
+											.style(move |t, s| {
+												if breakpoint_set_here {
+													if instr_currently_executing {
+														button::danger(t, s)
+													} else {
+														button::primary(t, s)
+													}
+												} else {
+													hidden_secondary_button_style(t, s)
+												}
+											})
+											.on_press(
+												if cpu.get_breakpoints().contains(&address) {
+													Message::RemoveBreakpoint(address)
+												} else {
+													Message::AddBreakpoint(address)
+												}
+											),
+										text!("{instr}").font(Font::MONOSPACE).color_maybe(
+											if instr_currently_executing {
+												Some(Color::from_rgb(1.0, 0.0, 0.0))
+											} else {
+												None
+											}
+										)
+									]
+									.align_y(Vertical::Center)
+									.spacing(10)
+									.into()
 								})
 								.collect::<Vec<_>>(),
 						)
@@ -231,60 +220,6 @@ impl App {
 			.style(panel_style),
 		]
 		.width(FillPortion(2))
-		.spacing(5)
-		.into()
-	}
-
-	fn breakpoints_pane(&self, breakpoint_hit: Option<u16>) -> Element<Message> {
-		column![
-			text("Breakpoints:"),
-			text_input("breakpoint address", &self.new_breakpoint_address_input)
-				.on_input(Message::ChangeNewBreakpointAddressInput)
-				.on_submit(Message::AddBreakpoint),
-			container(scrollable(if self.breakpoints.is_empty() {
-				Element::new(
-					container(text("No breakpoints set"))
-						.padding(5.0)
-						.width(Fill),
-				)
-			} else {
-				Column::with_children(self.breakpoints.iter().map(
-					|(breakpoint_address, enabled)| {
-						let this_breakpoint_was_hit = breakpoint_hit
-							.map(|addr| addr == *breakpoint_address)
-							.unwrap_or(false);
-
-						row![
-							checkbox(format!("{breakpoint_address:#04x}"), *enabled)
-								.font(Font::MONOSPACE)
-								.on_toggle(move |enabled| {
-									Message::SetBreakpointEnabled(*breakpoint_address, enabled)
-								})
-								.style(move |t, s| checkbox::Style {
-									text_color: if this_breakpoint_was_hit {
-										Some(Color::from_rgb(1.0, 0.0, 0.0))
-									} else {
-										None
-									},
-									..checkbox::primary(t, s)
-								}),
-							Space::new(Fill, 0.0),
-							button(text(icon_to_string(RequiredIcons::X)).font(REQUIRED_FONT))
-								.padding(Padding::default().left(2.5).right(2.5))
-								.on_press(Message::RemoveBreakpoint(*breakpoint_address))
-						]
-						.align_y(Vertical::Center)
-						.into()
-					},
-				))
-				.spacing(10)
-				.padding(10)
-				.width(Fill)
-				.into()
-			}))
-			.style(panel_style),
-		]
-		.width(FillPortion(1))
 		.spacing(5)
 		.into()
 	}
@@ -314,11 +249,6 @@ impl App {
 	fn simulation_pane(&self) -> Element<Message> {
 		let cpu = self.cpu.peek_output_buffer();
 
-		let breakpoint_hit = self
-			.breakpoints
-			.get_key_value(&cpu.get_program_counter())
-			.and_then(|(addr, enabled)| if *enabled { Some(*addr) } else { None });
-
 		column![
 			row![
 				button("Reset CPU")
@@ -335,16 +265,9 @@ impl App {
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),
-			row![
-				self.instructions_pane(cpu),
-				column![
-					self.breakpoints_pane(breakpoint_hit),
-					self.registers_pane(cpu),
-				]
+			row![self.instructions_pane(cpu), self.registers_pane(cpu),]
 				.spacing(20)
-			]
-			.spacing(20)
-			.height(FillPortion(1))
+				.height(FillPortion(1))
 		]
 		.spacing(20)
 		.padding(10)
@@ -475,6 +398,16 @@ fn button_style(theme: &Theme, status: button::Status) -> button::Style {
 	}
 }
 
+fn hidden_secondary_button_style(theme: &Theme, status: button::Status) -> button::Style {
+	match status {
+		button::Status::Active | button::Status::Disabled => button::Style {
+			background: None,
+			..button::secondary(theme, status)
+		},
+		button::Status::Hovered | button::Status::Pressed => button::secondary(theme, status),
+	}
+}
+
 fn panel_style(_theme: &Theme) -> container::Style {
 	container::Style {
 		background: Some(Color::from_rgb8(37, 37, 37).into()),
@@ -493,6 +426,5 @@ fn background_style(_theme: &Theme) -> container::Style {
 fn main() -> iced::Result {
 	iced::application(App::title, App::update, App::view)
 		.subscription(App::subscription)
-		.font(REQUIRED_FONT_BYTES)
 		.run()
 }

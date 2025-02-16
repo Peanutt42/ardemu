@@ -5,6 +5,5 @@ edition = "2021"
 
 [dependencies]
 iced = { version = "0.13.1", features = ["tokio", "lazy"] }
-iced_fonts = "0.1.1"
 ardemu_core = { path = "../ardemu_core" }
 triple_buffer = "8.1.0"
