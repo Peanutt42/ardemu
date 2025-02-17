@@ -10,8 +10,8 @@
 ; d is n3
 ; z is result
 
-mw b, 0                ; n1 = 0
-mw c, 1                ; n2 = 1
+mw b, 0                ; r1 = 0
+mw c, 1                ; r2 = 1
 
 add a, 1
 
@@ -21,7 +21,7 @@ loop:                  ; while n > 0
     add d, c           ; n3 += n2
     mw b, c            ; n1 = n2
     mw c, d            ; n2 = n3
-    sub a, 1           ; n--
+    dec a              ; n--
     lda loop
     jnz a              ; if n > 0, continue
 
@@ -30,14 +30,21 @@ loop:                  ; while n > 0
 
 `main.rs`:
 ```rust
-fn main() {
+use ardemu_asm_parse_macro::include_asm;
+use ardemu_core::{
+	Cpu, CpuStatus,
+	Register::{A, Z},
+};
+
+#[test]
+fn fib() {
 	let mut cpu = Cpu::new(include_asm!("src/fib.asm"));
 
 	let n = 10;
 
 	cpu.write_register(A, n);
 
-	while cpu.step().unwrap() {}
+	while matches!(cpu.step(), Ok(CpuStatus::Normal)) {}
 
 	let result = cpu.read_register(Z);
 
