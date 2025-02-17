@@ -24,7 +24,7 @@ loop:                  ; while n > 0
 	add d, c             ; n3 += n2
 	mw b, c              ; n1 = n2
 	mw c, d              ; n2 = n3
-	sub a, 1             ; n--
+	dec a                ; n--
 	lda loop
 	jnz a                ; if n > 0, continue
 
