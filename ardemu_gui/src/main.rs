@@ -11,7 +11,12 @@ use iced::{
 	alignment::Vertical,
 	border::rounded,
 	highlighter,
-	widget::{button, column, container, responsive, row, scrollable, text, text_editor, Column},
+	mouse::ScrollDelta,
+	widget::{
+		button, column, container, mouse_area, responsive, row, scrollable,
+		scrollable::{Direction, Scrollbar},
+		text, text_editor, text_input, Column, Row,
+	},
 	window, Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
 	Padding, Subscription, Theme,
@@ -31,6 +36,8 @@ struct App {
 	simulate_cpu: bool,
 	cpu: triple_buffer::Output<Cpu>,
 	cpu_sim_message_sender: std::sync::mpsc::Sender<CpuSimMessage>,
+	memory_view_start_address: u16,
+	memory_view_start_address_input: Option<String>,
 	asm_source_code_text_content: text_editor::Content,
 	asm_output: Result<Vec<Instruction>, AsmParseError>,
 }
@@ -52,6 +59,8 @@ impl Default for App {
 			cpu: readable_cpu_buffer,
 			simulate_cpu: false,
 			cpu_sim_message_sender: sender,
+			memory_view_start_address: 0,
+			memory_view_start_address_input: None,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
 			asm_output,
 		}
@@ -67,6 +76,9 @@ enum Message {
 	UpdateCpuState,
 	AddBreakpoint(u16),
 	RemoveBreakpoint(u16),
+	ChangeMemoryViewStartAddressInput(String),
+	ChangeMemoryViewStartAddressFromInput,
+	ChangeMemoryViewStartAddress(u16),
 }
 
 impl App {
@@ -116,6 +128,26 @@ impl App {
 			Message::RemoveBreakpoint(address) => {
 				self.send_cpu_sim_message(CpuSimMessage::RemoveBreakpoint(address));
 			}
+			Message::ChangeMemoryViewStartAddressInput(new_input) => {
+				self.memory_view_start_address_input = Some(new_input);
+			}
+			Message::ChangeMemoryViewStartAddress(address) => {
+				self.memory_view_start_address = address;
+			}
+			Message::ChangeMemoryViewStartAddressFromInput => {
+				if let Some(new_address) =
+					self.memory_view_start_address_input
+						.take()
+						.and_then(|input| {
+							if let Some(input) = input.strip_prefix("0x") {
+								u16::from_str_radix(input, 16).ok()
+							} else {
+								input.parse::<u16>().ok()
+							}
+						}) {
+					self.memory_view_start_address = new_address;
+				}
+			}
 		}
 	}
 
@@ -154,6 +186,7 @@ impl App {
 					.on_action(Message::AsmSourceCodeChanged),
 			))
 			.style(panel_style)
+			.width(Fill)
 			.height(if portrait { FillPortion(2) } else { Fill })
 		]
 		.into()
@@ -249,8 +282,149 @@ impl App {
 		.into()
 	}
 
+	const ROW_HEIGHT: f32 = 18.0;
+	const DATA_COLUMN_SPACING: f32 = 5.0;
+	const BYTES_PER_ROW: u16 = 16;
+	fn memory_pane<'a>(&'a self, cpu: &'a Cpu, portrait: bool) -> Element<'a, Message> {
+		column![
+			text("Memory:"),
+			container(responsive(move |size| -> Element<Message> {
+				let num_rows = (size.height / Self::ROW_HEIGHT).ceil() as usize;
+
+				column![
+					row![
+						text("Go to memory: "),
+						text_input(
+							"0x0000",
+							self.memory_view_start_address_input
+								.as_ref()
+								.unwrap_or(&format!("{:#06x}", self.memory_view_start_address))
+						)
+						.on_input(Message::ChangeMemoryViewStartAddressInput)
+						.on_submit(Message::ChangeMemoryViewStartAddressFromInput),
+					]
+					.width(200.0)
+					.align_y(Vertical::Center),
+					row![
+						container(Column::with_children((-1..num_rows as i16).map(|index| {
+							match index {
+								-1 => text(""),
+								_ => {
+									let address = self.memory_view_start_address
+										+ index as u16 * Self::BYTES_PER_ROW;
+									text!("{address:#06x} ").font(Font::MONOSPACE)
+								}
+							}
+							.into()
+						})))
+						.style(|_t| container::Style {
+							background: Some(Color::from_rgb(0.25, 0.25, 0.25).into()),
+							..Default::default()
+						}),
+						scrollable(
+							mouse_area(column![
+								container(
+									Row::with_children((0..Self::BYTES_PER_ROW).map(|index| {
+										text!("{index:2x}").font(Font::MONOSPACE).into()
+									}))
+									.spacing(Self::DATA_COLUMN_SPACING)
+									.padding(Padding::default().left(2.5).right(2.5))
+								)
+								.style(|_t| container::Style {
+									background: Some(Color::from_rgb(0.25, 0.25, 0.25).into()),
+									..Default::default()
+								}),
+								Column::with_children((0..num_rows).map(|row_index| {
+									let start_address = self.memory_view_start_address
+										+ row_index as u16 * Self::BYTES_PER_ROW;
+									let end_address = start_address + Self::BYTES_PER_ROW - 1;
+
+									let data_view: Element<Message> =
+										match cpu.inspect_ram_range(start_address..=end_address) {
+											Ok(data) => Row::with_children(
+												(0..Self::BYTES_PER_ROW).map(|byte_index| {
+													let byte_value = data[byte_index as usize];
+
+													text!("{byte_value:2x}")
+														.font(Font::MONOSPACE)
+														.into()
+												}),
+											)
+											.spacing(Self::DATA_COLUMN_SPACING)
+											.into(),
+											Err(e) => text!("{e}").font(Font::MONOSPACE).into(),
+										};
+
+									container(data_view)
+										.padding(Padding::default().left(2.5).right(2.5))
+										.height(Self::ROW_HEIGHT)
+										.style(move |_t| {
+											if row_index % 2 == 0 {
+												container::Style {
+													background: Some(
+														Color::from_rgb(0.1, 0.1, 0.1).into(),
+													),
+													..Default::default()
+												}
+											} else {
+												container::Style::default()
+											}
+										})
+										.into()
+								}))
+							])
+							.on_scroll(|delta| {
+								Message::ChangeMemoryViewStartAddress(match delta {
+									ScrollDelta::Lines { y, .. } => {
+										self.memory_view_start_address.saturating_add_signed(
+											-y as i16 * Self::BYTES_PER_ROW as i16,
+										)
+									}
+									ScrollDelta::Pixels { y, .. } => {
+										self.memory_view_start_address.saturating_add_signed(
+											(-y / Self::ROW_HEIGHT) as i16
+												* Self::BYTES_PER_ROW as i16,
+										)
+									}
+								})
+							}),
+						)
+						.direction(Direction::Horizontal(Scrollbar::new()))
+					]
+					.padding(10)
+				]
+				.into()
+			}))
+			.style(panel_style)
+		]
+		.width(if portrait { FillPortion(2) } else { Fill })
+		.spacing(5)
+		.into()
+	}
+
 	fn simulation_pane(&self, portrait: bool) -> Element<Message> {
 		let cpu = self.cpu.peek_output_buffer();
+
+		let instruction_pane = self.instructions_pane(cpu, portrait);
+		let register_pane = self.registers_pane(cpu);
+		let memory_pane = self.memory_pane(cpu, portrait);
+
+		let panes: Element<Message> = if portrait {
+			row![instruction_pane, register_pane, memory_pane,]
+				.spacing(20)
+				.height(FillPortion(1))
+				.into()
+		} else {
+			column![
+				row![instruction_pane, register_pane,]
+					.spacing(20)
+					.height(Fill),
+				container(memory_pane).height(Fill),
+			]
+			.spacing(20)
+			.height(FillPortion(1))
+			.into()
+		};
 
 		column![
 			row![
@@ -268,12 +442,7 @@ impl App {
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),
-			row![
-				self.instructions_pane(cpu, portrait),
-				self.registers_pane(cpu),
-			]
-			.spacing(20)
-			.height(FillPortion(1))
+			panes,
 		]
 		.spacing(20)
 		.padding(10)

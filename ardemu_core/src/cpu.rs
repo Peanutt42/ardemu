@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::RangeInclusive};
 
 use crate::{register::RegisterPair16, CpuError, Flags, Instruction, Register};
 
@@ -6,10 +6,7 @@ use crate::{register::RegisterPair16, CpuError, Flags, Instruction, Register};
 const SRAM_SIZE: usize = 64 * 1024;
 const STACK_START_ADDRESS: u16 = 0xFEFF;
 const STACK_END_ADDRESS: u16 = 0xFC00;
-const STACK_ADDRESS_RANGE: std::ops::Range<u16> = std::ops::Range {
-	start: STACK_END_ADDRESS,
-	end: STACK_START_ADDRESS + 1,
-};
+const STACK_ADDRESS_RANGE: RangeInclusive<u16> = STACK_END_ADDRESS..=STACK_START_ADDRESS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CpuStatus {
@@ -89,7 +86,7 @@ impl Cpu {
 		reg_pair.write_in(&mut self.registers, value);
 	}
 
-	fn read_ram(&self, address: u16) -> Result<u8, CpuError> {
+	pub fn read_ram(&self, address: u16) -> Result<u8, CpuError> {
 		if STACK_ADDRESS_RANGE.contains(&address) {
 			return Err(CpuError::InvalidRamAddress { addr: address });
 		}
@@ -100,7 +97,18 @@ impl Cpu {
 			.ok_or(CpuError::InvalidRamAddress { addr: address })?;
 		Ok(*ram)
 	}
-	fn write_ram(&mut self, address: u16, value: u8) -> Result<(), CpuError> {
+
+	/// returns data from any valid address range, also stack!
+	/// ONLY FOR DEBUGGING, LIKE IN THE GUI MEMORY VIEWER!
+	pub fn inspect_ram_range(&self, address_range: RangeInclusive<u16>) -> Result<&[u8], CpuError> {
+		self.sram
+			.get(*address_range.start() as usize..=*address_range.end() as usize)
+			.ok_or(CpuError::InvalidRamAddress {
+				addr: *address_range.start(),
+			})
+	}
+
+	pub fn write_ram(&mut self, address: u16, value: u8) -> Result<(), CpuError> {
 		if STACK_ADDRESS_RANGE.contains(&address) {
 			return Err(CpuError::InvalidRamAddress { addr: address });
 		}
