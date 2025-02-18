@@ -1,5 +1,5 @@
 use crate::{
-	register::{HlOrImm16, RegisterOrImm8},
+	register::{RegisterPair16, UpperRegister},
 	AsmParseError, AsmParseErrorType, Instruction, Register,
 };
 use std::collections::HashMap;
@@ -35,19 +35,19 @@ impl Line {
 }
 
 /// parses different number formats like "0x123" or "0b10101" and normal "42"
-fn parse_number(s: &str) -> Result<u32, AsmParseErrorType> {
+fn parse_number(s: &str) -> Result<i32, AsmParseErrorType> {
 	if let Some(s) = s.strip_prefix("0x") {
-		u32::from_str_radix(s, 16).map_err(|source| AsmParseErrorType::InvalidNumber {
+		i32::from_str_radix(s, 16).map_err(|source| AsmParseErrorType::InvalidNumber {
 			string: s.to_string(),
 			source,
 		})
 	} else if let Some(s) = s.strip_prefix("0b") {
-		u32::from_str_radix(s, 2).map_err(|source| AsmParseErrorType::InvalidNumber {
+		i32::from_str_radix(s, 2).map_err(|source| AsmParseErrorType::InvalidNumber {
 			string: s.to_string(),
 			source,
 		})
 	} else {
-		s.parse::<u32>()
+		s.parse::<i32>()
 			.map_err(|source| AsmParseErrorType::InvalidNumber {
 				string: s.to_string(),
 				source,
@@ -56,24 +56,24 @@ fn parse_number(s: &str) -> Result<u32, AsmParseErrorType> {
 }
 
 fn parse_register(s: &str) -> Result<Register, AsmParseErrorType> {
-	match s {
-		"a" => Ok(Register::A),
-		"b" => Ok(Register::B),
-		"c" => Ok(Register::C),
-		"d" => Ok(Register::D),
-		"l" => Ok(Register::L),
-		"h" => Ok(Register::H),
-		"z" => Ok(Register::Z),
-		"f" => Ok(Register::F),
-		_ => Err(AsmParseErrorType::InvalidRegister(s.to_string())),
+	match s.strip_prefix("r") {
+		Some(s) => s
+			.parse::<u8>()
+			.map_err(|_| ())
+			.and_then(|reg_index| Register::try_from(reg_index).map_err(|_| ()))
+			.map_err(|_| AsmParseErrorType::InvalidRegister(s.to_string())),
+		None => Err(AsmParseErrorType::InvalidRegister(s.to_string())),
 	}
 }
 
-fn parse_imm8_or_register(s: &str) -> Result<RegisterOrImm8, AsmParseErrorType> {
-	match parse_register(s) {
-		Ok(register) => Ok(RegisterOrImm8::Register(register)),
-		Err(_) => parse_number(s).map(|immediate| RegisterOrImm8::Imm8(immediate as u8)),
-	}
+fn parse_upper_register(s: &str) -> Result<UpperRegister, AsmParseErrorType> {
+	let register = parse_register(s)?;
+	UpperRegister::new(register).ok_or(AsmParseErrorType::ExpectedUpperRegister(register))
+}
+
+fn parse_register_pair(s: &str) -> Result<RegisterPair16, AsmParseErrorType> {
+	let low_register = parse_register(s)?;
+	RegisterPair16::new(low_register).ok_or(AsmParseErrorType::InvalidRegisterPairLowRegister)
 }
 
 fn split_mnemonic_operands(line: &str) -> (String, Vec<&str>) {
@@ -105,48 +105,51 @@ fn consume_operands<'a, 'b, const N: usize>(
 
 /// Substitutes a LDA instruction to a program address with a LDA instruction to a symbol, which is later converted back to a LDA instruction to a program address.
 enum IntermediateInstruction {
-	Lda { symbol: String, line_number: usize },
+	Jmp { symbol: String, line_number: usize },
+	Call { symbol: String, line_number: usize },
+	Brne { symbol: String, line_number: usize },
 	Instruction(Instruction),
+}
+impl IntermediateInstruction {
+	fn resolve_into_instruction(
+		self,
+		program_address: u16,
+		symbol_table: &HashMap<String, u16>,
+	) -> Result<Instruction, AsmParseError> {
+		let resolve_symbol = |symbol: String, line_number: usize| {
+			symbol_table.get(&symbol).copied().ok_or(AsmParseError::new(
+				AsmParseErrorType::UndefinedLabel(symbol),
+				line_number,
+			))
+		};
+
+		match self {
+			Self::Jmp {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Jmp {
+				address: address.into(),
+			}),
+			Self::Call {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Call {
+				address: address.into(),
+			}),
+			Self::Brne {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brne {
+				offset: (address as i32 - program_address as i32) as i8 - 1,
+			}),
+			Self::Instruction(instruction) => Ok(instruction),
+		}
+	}
 }
 impl From<Instruction> for IntermediateInstruction {
 	fn from(instruction: Instruction) -> Self {
 		IntermediateInstruction::Instruction(instruction)
 	}
-}
-
-fn inc_macro(reg: Register) -> Instruction {
-	Instruction::Add {
-		reg,
-		value: 1.into(),
-	}
-}
-
-fn dec_macro(reg: Register) -> Instruction {
-	Instruction::Sub {
-		reg,
-		value: 1.into(),
-	}
-}
-
-fn not_macro(reg: Register) -> Instruction {
-	Instruction::Nor {
-		reg,
-		value: reg.into(),
-	}
-}
-
-fn nand_macro(reg: Register, value: RegisterOrImm8) -> [Instruction; 2] {
-	[Instruction::And { reg, value }, not_macro(reg)]
-}
-
-fn jmp_macro(symbol: String, line_number: usize) -> [IntermediateInstruction; 2] {
-	[
-		IntermediateInstruction::Lda {
-			symbol,
-			line_number,
-		},
-		Instruction::Jnz { value: 1.into() }.into(),
-	]
 }
 
 /// appends the parsed instruction onto 'output_instruction'
@@ -157,50 +160,59 @@ fn parse_instruction(
 	output_instruction: &mut Vec<IntermediateInstruction>,
 ) -> Result<(), AsmParseErrorType> {
 	match mnemonic.to_uppercase().as_str() {
-		"MW" => {
-			let operands = consume_operands::<2>(operands)?;
-			let reg = parse_register(operands[0])?;
-			let value = parse_imm8_or_register(operands[1])?;
-			output_instruction.push(Instruction::Mw { reg, value }.into());
+		"JMP" => {
+			let operands = consume_operands::<1>(operands)?;
+			let symbol = operands[0].to_string();
+			output_instruction.push(IntermediateInstruction::Jmp {
+				symbol,
+				line_number,
+			});
 			Ok(())
 		}
-		"LW" => match operands.len() {
-			1 | 2 => {
-				let register = parse_register(operands[0])?;
-				let address = match operands.get(1) {
-					Some(address) => (parse_number(address)? as u16).into(),
-					None => HlOrImm16::Hl,
-				};
-				output_instruction.push(Instruction::Lw { register, address }.into());
-				Ok(())
-			}
-			_ => Err(AsmParseErrorType::InvalidDynamicArgumentCount {
-				allowed_counts: vec![1, 2],
-				actual_count: operands.len(),
-			}),
-		},
-		"SW" => match operands.len() {
-			1 => {
-				let address = HlOrImm16::Hl;
-				let register = parse_register(operands[0])?;
-				output_instruction.push(Instruction::Sw { address, register }.into());
-				Ok(())
-			}
-			2 => {
-				let address = (parse_number(operands[0])? as u16).into();
-				let register = parse_register(operands[1])?;
-				output_instruction.push(Instruction::Sw { address, register }.into());
-				Ok(())
-			}
-			_ => Err(AsmParseErrorType::InvalidDynamicArgumentCount {
-				allowed_counts: vec![1, 2],
-				actual_count: operands.len(),
-			}),
-		},
+		"EOR" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Eor { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"LDI" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_upper_register(operands[0])?;
+			let value = parse_number(operands[1])? as u8;
+			output_instruction.push(
+				Instruction::Ldi {
+					register,
+					value: value.into(),
+				}
+				.into(),
+			);
+			Ok(())
+		}
+		"MOV" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Mov { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"MOVW" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register_pair(operands[0])?;
+			let reg_read = parse_register_pair(operands[1])?;
+			output_instruction.push(Instruction::Movw { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"RJMP" => {
+			let operands = consume_operands::<1>(operands)?;
+			let offset = parse_number(operands[0])? as i16;
+			output_instruction.push(Instruction::RJmp { offset }.into());
+			Ok(())
+		}
 		"PUSH" => {
 			let operands = consume_operands::<1>(operands)?;
-			let value = parse_imm8_or_register(operands[0])?;
-			output_instruction.push(Instruction::Push { value }.into());
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Push { register }.into());
 			Ok(())
 		}
 		"POP" => {
@@ -209,104 +221,87 @@ fn parse_instruction(
 			output_instruction.push(Instruction::Pop { register }.into());
 			Ok(())
 		}
-		"LDA" => {
+		"CPI" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_upper_register(operands[0])?;
+			let value = parse_number(operands[1])? as u8;
+			output_instruction.push(
+				Instruction::Cpi {
+					register,
+					value: value.into(),
+				}
+				.into(),
+			);
+			Ok(())
+		}
+		"BRNE" => {
 			let operands = consume_operands::<1>(operands)?;
-			output_instruction.push(IntermediateInstruction::Lda {
-				symbol: operands[0].to_string(),
+			let symbol = operands[0].to_string();
+			output_instruction.push(IntermediateInstruction::Brne {
+				symbol,
 				line_number,
 			});
 			Ok(())
 		}
-		"JNZ" => {
+		"CALL" => {
 			let operands = consume_operands::<1>(operands)?;
-			let value = parse_imm8_or_register(operands[0])?;
-			output_instruction.push(Instruction::Jnz { value }.into());
+			let symbol = operands[0].to_string();
+			output_instruction.push(IntermediateInstruction::Call {
+				symbol,
+				line_number,
+			});
+			Ok(())
+		}
+		"RET" => {
+			output_instruction.push(Instruction::Ret {}.into());
+			Ok(())
+		}
+		"SUBI" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_upper_register(operands[0])?;
+			let value = parse_number(operands[1])? as u8;
+			output_instruction.push(
+				Instruction::Subi {
+					register,
+					value: value.into(),
+				}
+				.into(),
+			);
 			Ok(())
 		}
 		"ADD" => {
 			let operands = consume_operands::<2>(operands)?;
-			let reg = parse_register(operands[0])?;
-			let value = parse_imm8_or_register(operands[1])?;
-			output_instruction.push(Instruction::Add { reg, value }.into());
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Add { reg_dest, reg_read }.into());
 			Ok(())
 		}
-		"SUB" => {
+		"STS" => {
 			let operands = consume_operands::<2>(operands)?;
-			let reg = parse_register(operands[0])?;
-			let value = parse_imm8_or_register(operands[1])?;
-			output_instruction.push(Instruction::Sub { reg, value }.into());
-			Ok(())
-		}
-		"AND" => {
-			let operands = consume_operands::<2>(operands)?;
-			let reg = parse_register(operands[0])?;
-			let value = parse_imm8_or_register(operands[1])?;
-			output_instruction.push(Instruction::And { reg, value }.into());
-			Ok(())
-		}
-		"OR" => {
-			let operands = consume_operands::<2>(operands)?;
-			let reg = parse_register(operands[0])?;
-			let value = parse_imm8_or_register(operands[1])?;
-			output_instruction.push(Instruction::Or { reg, value }.into());
-			Ok(())
-		}
-		"NOR" => {
-			let operands = consume_operands::<2>(operands)?;
-			let reg = parse_register(operands[0])?;
-			let value = parse_imm8_or_register(operands[1])?;
-			output_instruction.push(Instruction::Nor { reg, value }.into());
-			Ok(())
-		}
-		/*
-		<=========================>
-		from here on only "macros", so only alias instructions that are composed of the native instructions from above ^
-		<=========================>
-		*/
-		"INC" => {
-			let operands = consume_operands::<1>(operands)?;
-			let reg = parse_register(operands[0])?;
-			output_instruction.push(inc_macro(reg).into());
-			Ok(())
-		}
-		"DEC" => {
-			let operands = consume_operands::<1>(operands)?;
-			let reg = parse_register(operands[0])?;
-			output_instruction.push(dec_macro(reg).into());
-			Ok(())
-		}
-		"NOT" => {
-			let operands = consume_operands::<1>(operands)?;
-			let reg = parse_register(operands[0])?;
-			output_instruction.push(not_macro(reg).into());
-			Ok(())
-		}
-		"NAND" => {
-			let operands = consume_operands::<2>(operands)?;
-			let reg = parse_register(operands[0])?;
-			let value = parse_imm8_or_register(operands[1])?;
-			output_instruction.append(
-				&mut nand_macro(reg, value)
-					.into_iter()
-					.map(|i| i.into())
-					.collect::<Vec<IntermediateInstruction>>(),
+			let address = parse_number(operands[0])? as u16;
+			let register = parse_register(operands[1])?;
+			output_instruction.push(
+				Instruction::Sts {
+					address: address.into(),
+					register,
+				}
+				.into(),
 			);
 			Ok(())
 		}
-		"JMP" => match operands.len() {
-			0 => {
-				output_instruction.push(Instruction::Jnz { value: 1.into() }.into());
-				Ok(())
-			}
-			1 => {
-				output_instruction.extend(jmp_macro(operands[0].to_string(), line_number));
-				Ok(())
-			}
-			_ => Err(AsmParseErrorType::InvalidDynamicArgumentCount {
-				allowed_counts: vec![0, 1],
-				actual_count: operands.len(),
-			}),
-		},
+		"LDS" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_register(operands[0])?;
+			let address = parse_number(operands[1])? as u16;
+			output_instruction.push(
+				Instruction::Lds {
+					address: address.into(),
+					register,
+				}
+				.into(),
+			);
+			Ok(())
+		}
 		_ => Err(AsmParseErrorType::InvalidInstruction(mnemonic.to_string())),
 	}
 }
@@ -343,118 +338,94 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 	}
 
 	let mut instructions: Vec<Instruction> = Vec::with_capacity(intermediate_instructions.len());
-	for intermediate_instruction in intermediate_instructions {
-		let instruction = match intermediate_instruction {
-			IntermediateInstruction::Instruction(instruction) => instruction,
-			IntermediateInstruction::Lda {
-				symbol,
-				line_number,
-			} => match symbol_table.get(&symbol.clone()) {
-				Some(&program_address) => Instruction::Lda {
-					address: program_address.into(),
-				},
-				None => {
-					return Err(AsmParseError::new(
-						AsmParseErrorType::UndefinedLabel(symbol),
-						line_number,
-					));
-				}
-			},
-		};
-		instructions.push(instruction);
+	for (program_address, intermediate_instruction) in
+		intermediate_instructions.into_iter().enumerate()
+	{
+		instructions.push(
+			intermediate_instruction
+				.resolve_into_instruction(program_address as u16, &symbol_table)?,
+		);
 	}
 
 	Ok(instructions)
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
-	use crate::{self as ardemu_core, parse_asm, AsmParseError, AsmParseErrorType};
-	use crate::{Instruction, A, B, C};
-	use ardemu_asm_parse_macro::parse_asm;
+	use crate::{parse_asm, AsmParseError, AsmParseErrorType};
+	use crate::{Instruction, RegisterPair16, R0, R1, R16, R24, R30};
 
 	#[test]
 	fn test_parse_asm() {
 		assert_eq!(
-			parse_asm!(
-				r"
-				; leading comment
-				mw a, 0 ; comment
-				mw b, 1
-				mw c, 2
-				; another comment
-			loop:
-				add a, b
-				and a, b
-				push a
-				pop a
-				lda loop
-				jnz 1
-			"
+			parse_asm(
+				r"begin:
+				jmp begin
+				eor r1, r1
+				ldi r16, 0
+				mov r0, r1
+				movw r30, r24 ; r31:r30 = r25:r24
+				rjmp -1       ; would be a infinitive loop
+				push r0
+				pop r0
+				cpi r16, 1
+				brne begin
+				call begin    ; would also be a infinitive loop
+				ret
+				subi r16, 1
+				add r16, r16
+				sts 0x042, r0
+				lds r0, 0x042
+				",
 			),
-			[
-				Instruction::Mw {
-					reg: A,
+			Ok(vec![
+				Instruction::Jmp { address: 0.into() },
+				Instruction::Eor {
+					reg_dest: R1,
+					reg_read: R1
+				},
+				Instruction::Ldi {
+					register: R16.try_into().unwrap(),
 					value: 0.into()
 				},
-				Instruction::Mw {
-					reg: B,
+				Instruction::Mov {
+					reg_dest: R0,
+					reg_read: R1
+				},
+				Instruction::Movw {
+					reg_dest: RegisterPair16::new(R30).unwrap(),
+					reg_read: RegisterPair16::new(R24).unwrap()
+				},
+				Instruction::RJmp { offset: -1 },
+				Instruction::Push { register: R0 },
+				Instruction::Pop { register: R0 },
+				Instruction::Cpi {
+					register: R16.try_into().unwrap(),
 					value: 1.into()
 				},
-				Instruction::Mw {
-					reg: C,
-					value: 2.into()
+				// update offset, if relative offset to 'begin' changes in the source code
+				Instruction::Brne { offset: -10 },
+				Instruction::Call { address: 0.into() },
+				Instruction::Ret {},
+				Instruction::Subi {
+					register: R16.try_into().unwrap(),
+					value: 1.into()
 				},
 				Instruction::Add {
-					reg: A,
-					value: B.into(),
+					reg_dest: R16,
+					reg_read: R16
 				},
-				Instruction::And {
-					reg: A,
-					value: B.into(),
+				Instruction::Sts {
+					address: 0x042.into(),
+					register: R0
 				},
-				Instruction::Push { value: A.into() },
-				Instruction::Pop { register: A },
-				Instruction::Lda {
-					address: crate::register::Imm16(3)
+				Instruction::Lds {
+					register: R0,
+					address: 0x042.into()
 				},
-				Instruction::Jnz { value: 1.into() },
-			]
-		);
-	}
-
-	#[test]
-	fn test_parse_invalid_argument_count() {
-		assert_eq!(
-			parse_asm("mw a"),
-			Err(AsmParseError::new(
-				AsmParseErrorType::InvalidArgumentCount {
-					expected_count: 2,
-					actual_count: 1,
-				},
-				1
-			))
-		);
-		assert_eq!(
-			parse_asm("jnz "),
-			Err(AsmParseError::new(
-				AsmParseErrorType::InvalidArgumentCount {
-					expected_count: 1,
-					actual_count: 0,
-				},
-				1
-			))
-		);
-		assert_eq!(
-			parse_asm("add a 0x0 0x1"),
-			Err(AsmParseError::new(
-				AsmParseErrorType::InvalidArgumentCount {
-					expected_count: 2,
-					actual_count: 3,
-				},
-				1
-			))
-		);
+			])
+		)
 	}
 
 	#[test]
@@ -472,48 +443,5 @@ mod tests {
 				5
 			))
 		);
-	}
-
-	#[test]
-	fn test_asm_macro_expansion() {
-		assert_eq!(
-			parse_asm(
-				r"start_label_at_0:
-				inc a
-				dec a
-				not a
-				nand a, b
-				lda start_label_at_0
-				jmp
-				jmp start_label_at_0
-				"
-			),
-			Ok(vec![
-				Instruction::Add {
-					reg: A,
-					value: 1.into()
-				},
-				Instruction::Sub {
-					reg: A,
-					value: 1.into()
-				},
-				Instruction::Nor {
-					reg: A,
-					value: A.into()
-				},
-				Instruction::And {
-					reg: A,
-					value: B.into()
-				},
-				Instruction::Nor {
-					reg: A,
-					value: A.into()
-				},
-				Instruction::Lda { address: 0.into() },
-				Instruction::Jnz { value: 1.into() },
-				Instruction::Lda { address: 0.into() },
-				Instruction::Jnz { value: 1.into() },
-			])
-		)
 	}
 }

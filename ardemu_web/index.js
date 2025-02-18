@@ -5,30 +5,31 @@ await init();
 const output = document.querySelector(".output-pane");
 
 const editor = document.getElementById("editor");
-editor.value = `; a is n
-; b is n1
-; c is n2
-; d is n3
-; z is result
+editor.value = `; r16 is n
+; r17 is n1
+; r18 is n2
+; r19 is n3
+; r20 is result
+; r21 is 1
 
-mw a, 10
+ldi r16, 10                 ; n = 10
 
-mw b, 0                ; r1 = 0
-mw c, 1                ; r2 = 1
+ldi r17, 0                  ; n1 = 0
+ldi r18, 1                  ; n2 = 1
 
-add a, 1
+ldi r21, 1                  ; r21 = 1
+add r16, r21
 
-loop:                  ; while n > 0
-	mw z, b              ; result = n1
-	mw d, b              ; n3 = n1
-	add d, c             ; n3 += n2
-	mw b, c              ; n1 = n2
-	mw c, d              ; n2 = n3
-	dec a                ; n--
-	lda loop
-	jnz a                ; if n > 0, continue
+loop:                       ; while n > 0
+    mov r20, r17            ; result = n1
+    mov r19, r17            ; n3 = n1
+    add r19, r18            ; n3 += n2
+    mov r17, r18            ; n1 = n2
+    mov r18, r19            ; n2 = n3
+    subi r16, 1             ; n--
+    brne loop               ; if n > 0, continue
 
-; result is in z`;
+; result is in r20`;
 
 editor.addEventListener("input", () => evaluate());
 

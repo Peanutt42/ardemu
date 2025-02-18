@@ -1,6 +1,8 @@
 use std::num::ParseIntError;
 use thiserror::Error;
 
+use crate::Register;
+
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
 pub enum CpuError {
 	#[error("Invalid RAM address {addr:#04x}")]
@@ -50,4 +52,8 @@ pub enum AsmParseErrorType {
 	},
 	#[error("undefined label: '{0}'")]
 	UndefinedLabel(String),
+	#[error("expected upper registers (r16-r31), not {0}")]
+	ExpectedUpperRegister(Register),
+	#[error("Invalid low register for 16 bit value register pair cannot be r31, as there is no r32 to be the high register")]
+	InvalidRegisterPairLowRegister,
 }

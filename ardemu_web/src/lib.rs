@@ -1,6 +1,6 @@
 use ardemu_core::{
 	parse_asm, Cpu, CpuStatus,
-	Register::{self, A, Z},
+	Register::{self, R20},
 };
 use wasm_bindgen::prelude::*;
 
@@ -17,10 +17,6 @@ pub fn evaluate(source_code: &str) -> String {
 		),
 		Err(e) => return format!("{e:?}"),
 	};
-
-	let n = 10;
-
-	cpu.write_register(A, n);
 
 	loop {
 		match cpu.step() {
@@ -39,7 +35,7 @@ pub fn evaluate(source_code: &str) -> String {
 		.collect::<Vec<String>>()
 		.join(", ");
 
-	let result = cpu.read_register(Z);
+	let result = cpu.read_register(R20);
 	format!(
 		"{instructions_str}\n\n{cpu_register_str}\n\nEvaluated to {}",
 		result

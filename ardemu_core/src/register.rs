@@ -17,63 +17,17 @@ impl std::fmt::Display for Imm16 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
-pub enum HlOrImm16 {
-	Hl,
-	Imm16(Imm16),
-}
-impl HlOrImm16 {
-	pub fn imm16_or_hl(&self, hl: u16) -> u16 {
-		match *self {
-			Self::Hl => hl,
-			Self::Imm16(imm16) => imm16.0,
-		}
+pub struct Imm8(pub u8);
+
+impl From<u8> for Imm8 {
+	fn from(value: u8) -> Self {
+		Self(value)
 	}
 }
-impl From<u16> for HlOrImm16 {
-	fn from(value: u16) -> Self {
-		Self::Imm16(Imm16(value))
-	}
-}
-impl std::fmt::Display for HlOrImm16 {
+
+impl std::fmt::Display for Imm8 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Hl => write!(f, "HL"),
-			Self::Imm16(imm) => write!(f, "{}", imm),
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
-pub enum RegisterOrImm8 {
-	Register(Register),
-	Imm8(u8),
-}
-
-impl RegisterOrImm8 {
-	pub fn imm8_or_else(&self, else_callback: impl FnOnce(Register) -> u8) -> u8 {
-		match *self {
-			Self::Imm8(immediate) => immediate,
-			Self::Register(reg) => else_callback(reg),
-		}
-	}
-}
-
-impl From<Register> for RegisterOrImm8 {
-	fn from(register: Register) -> Self {
-		Self::Register(register)
-	}
-}
-impl From<u8> for RegisterOrImm8 {
-	fn from(immediate: u8) -> Self {
-		Self::Imm8(immediate)
-	}
-}
-impl std::fmt::Display for RegisterOrImm8 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match *self {
-			RegisterOrImm8::Register(r) => write!(f, "{}", r),
-			RegisterOrImm8::Imm8(i) => write!(f, "{}", i),
-		}
+		write!(f, "{:#04x}", self.0)
 	}
 }
 
@@ -92,39 +46,76 @@ impl std::fmt::Display for RegisterOrImm8 {
 )]
 #[repr(u8)]
 pub enum Register {
-	/// GP register
-	A = 0,
-	/// GP register
-	B,
-	/// GP register
-	C,
-	/// GP register
-	D,
-	/// GP register/(L)ow index register
-	L,
-	/// GP register/(H)igh index register
-	H,
-	/// GP register
-	Z,
-	/// flags (LSB to MSB)
-	/// LESS
-	/// EQUAL
-	/// CARRY
-	/// BORROW
-	F,
+	/* General purpose registers */
+	R0,
+	R1,
+	R2,
+	R3,
+	R4,
+	R5,
+	R6,
+	R7,
+	R8,
+	R9,
+	R10,
+	R11,
+	R12,
+	R13,
+	R14,
+	R15,
+	R16,
+	R17,
+	R18,
+	R19,
+	R20,
+	R21,
+	R22,
+	R23,
+	R24,
+	R25,
+	R26,
+	R27,
+	R28,
+	R29,
+	R30,
+	R31,
 }
 
 impl Register {
-	pub const COUNT: usize = 8;
+	pub const COUNT: usize = 32;
 	pub const ALL: &[Register; Self::COUNT] = &[
-		Self::A,
-		Self::B,
-		Self::C,
-		Self::D,
-		Self::L,
-		Self::H,
-		Self::Z,
-		Self::F,
+		Self::R0,
+		Self::R1,
+		Self::R2,
+		Self::R3,
+		Self::R4,
+		Self::R5,
+		Self::R6,
+		Self::R7,
+		Self::R8,
+		Self::R9,
+		Self::R10,
+		Self::R11,
+		Self::R12,
+		Self::R13,
+		Self::R14,
+		Self::R15,
+		Self::R16,
+		Self::R17,
+		Self::R18,
+		Self::R19,
+		Self::R20,
+		Self::R21,
+		Self::R22,
+		Self::R23,
+		Self::R24,
+		Self::R25,
+		Self::R26,
+		Self::R27,
+		Self::R28,
+		Self::R29,
+		Self::R30,
+		Self::R31,
 	];
 
 	/// this will not panic, enforced by the type
@@ -143,10 +134,83 @@ macro_rules! display_register {
 		impl std::fmt::Display for Register {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				match *self {
-					$(Register::$variant => write!(f, "{}", stringify!($variant).to_uppercase()),)*
+					$(Register::$variant => write!(f, "{}", stringify!($variant).to_lowercase()),)*
 				}
 			}
 		}
 	};
 }
-display_register!(A, B, C, D, L, H, Z, F);
+display_register!(
+	R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R16, R17, R18, R19, R20,
+	R21, R22, R23, R24, R25, R26, R27, R28, R29, R30, R31
+);
+
+/// ensures that the register is a upper register (R16-R31)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
+pub struct UpperRegister(pub Register);
+
+impl UpperRegister {
+	pub fn new(register: Register) -> Option<Self> {
+		if register >= Register::R16 {
+			Some(Self(register))
+		} else {
+			None
+		}
+	}
+}
+
+impl TryFrom<Register> for UpperRegister {
+	type Error = ();
+
+	fn try_from(value: Register) -> Result<Self, Self::Error> {
+		Self::new(value).ok_or(())
+	}
+}
+
+impl From<UpperRegister> for Register {
+	fn from(value: UpperRegister) -> Self {
+		value.0
+	}
+}
+
+impl std::fmt::Display for UpperRegister {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
+/// combines value of two 8 bit registers into a 16 bit value
+/// high_register must always be low_register + 1, as the values must be stored continuously
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
+pub struct RegisterPair16 {
+	high: Register,
+	low: Register,
+}
+
+impl RegisterPair16 {
+	/// only fails if register is the low register is the last register,
+	/// as there is no register after it to store the high value
+	pub fn new(low: Register) -> Option<Self> {
+		let high = Register::try_from(low as u8 + 1).ok()?;
+		Some(Self { high, low })
+	}
+
+	/// this will not panic, enforced by the type
+	pub fn read_from(&self, registers: &[u8; Register::COUNT]) -> u16 {
+		(registers[self.high as usize] * u8::MAX) as u16 + registers[self.low as usize] as u16
+	}
+
+	/// this will not panic, enforced by the type
+	pub fn write_in(&self, registers: &mut [u8; Register::COUNT], value: u16) {
+		let high_value = (value >> 8) as u8;
+		let low_value = value as u8;
+		registers[self.high as usize] = high_value;
+		registers[self.low as usize] = low_value;
+	}
+}
+
+impl std::fmt::Display for RegisterPair16 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}:{}", self.high, self.low)
+	}
+}

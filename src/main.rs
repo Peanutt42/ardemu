@@ -1,7 +1,7 @@
 use ardemu_asm_parse_macro::include_asm;
 use ardemu_core::{
 	Cpu, CpuStatus,
-	Register::{A, B, C, D, Z},
+	Register::{R16, R17, R18, R19, R20},
 };
 
 fn main() {
@@ -9,7 +9,7 @@ fn main() {
 
 	let n = 10;
 
-	cpu.write_register(A, n);
+	cpu.write_register(R16, n);
 
 	loop {
 		let current_instruction = cpu.get_current_instruction();
@@ -18,14 +18,14 @@ fn main() {
 			Ok(cpu_status) => match cpu_status {
 				CpuStatus::Normal => {
 					println!(
-						"{}: {}\n\t-> a={:#04x}, b={:#04x}, c={:#04x}, d={:#04x}, z={:#04x}",
+						"{}: {}\n\t-> r16={:#04x}, r17={:#04x}, r18={:#04x}, r19={:#04x}, r20={:#04x}",
 						cpu.get_program_counter(),
 						current_instruction.unwrap(),
-						cpu.read_register(A),
-						cpu.read_register(B),
-						cpu.read_register(C),
-						cpu.read_register(D),
-						cpu.read_register(Z)
+						cpu.read_register(R16),
+						cpu.read_register(R17),
+						cpu.read_register(R18),
+						cpu.read_register(R19),
+						cpu.read_register(R20),
 					);
 				}
 				CpuStatus::BreakpointHit => {
@@ -43,7 +43,7 @@ fn main() {
 		}
 	}
 
-	let output = cpu.read_register(Z);
+	let output = cpu.read_register(R20);
 	assert_eq!(output, 55);
 	println!("Fib({n}) = {output}");
 }

@@ -10,6 +10,7 @@ use ardemu_core::{parse_asm, AsmParseError, Cpu, CpuStatus, Instruction, Registe
 use iced::{
 	alignment::Vertical,
 	border::rounded,
+	highlighter,
 	widget::{button, column, container, responsive, row, scrollable, text, text_editor, Column},
 	window, Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
@@ -121,14 +122,14 @@ impl App {
 	fn view(&self) -> Element<Message> {
 		container(responsive(|size| {
 			if size.width > size.height {
-				row![self.editor_pane(false), self.simulation_pane(),]
+				row![self.editor_pane(false), self.simulation_pane(false),]
 					.spacing(20)
 					.padding(10)
 					.width(Fill)
 					.height(Fill)
 					.into()
 			} else {
-				column![self.editor_pane(true), self.simulation_pane(),]
+				column![self.editor_pane(true), self.simulation_pane(true),]
 					.spacing(20)
 					.padding(10)
 					.width(Fill)
@@ -147,6 +148,7 @@ impl App {
 			text("Assembly Editor:"),
 			container(scrollable(
 				text_editor(&self.asm_source_code_text_content)
+					.highlight("S", highlighter::Theme::Base16Eighties)
 					.font(Font::MONOSPACE)
 					.style(text_editor_style)
 					.on_action(Message::AsmSourceCodeChanged),
@@ -157,7 +159,7 @@ impl App {
 		.into()
 	}
 
-	fn instructions_pane(&self, cpu: &Cpu) -> Element<Message> {
+	fn instructions_pane(&self, cpu: &Cpu, portrait: bool) -> Element<Message> {
 		let program_counter = cpu.get_program_counter();
 
 		column![
@@ -220,7 +222,7 @@ impl App {
 			})
 			.style(panel_style),
 		]
-		.width(FillPortion(2))
+		.width(if portrait { FillPortion(2) } else { Fill })
 		.spacing(5)
 		.into()
 	}
@@ -242,12 +244,12 @@ impl App {
 			))
 			.style(panel_style)
 		]
-		.width(FillPortion(1))
+		.width(Fill)
 		.spacing(5)
 		.into()
 	}
 
-	fn simulation_pane(&self) -> Element<Message> {
+	fn simulation_pane(&self, portrait: bool) -> Element<Message> {
 		let cpu = self.cpu.peek_output_buffer();
 
 		column![
@@ -266,9 +268,12 @@ impl App {
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),
-			row![self.instructions_pane(cpu), self.registers_pane(cpu),]
-				.spacing(20)
-				.height(FillPortion(1))
+			row![
+				self.instructions_pane(cpu, portrait),
+				self.registers_pane(cpu),
+			]
+			.spacing(20)
+			.height(FillPortion(1))
 		]
 		.spacing(20)
 		.padding(10)

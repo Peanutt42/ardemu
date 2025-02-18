@@ -1,26 +1,23 @@
-mw a, 255
-mw b, 255
-mw c, 255
-mw d, 255
+ldi r16, 255
+ldi r17, 255
+ldi r18, 255
+ldi r19, 255
 
-loop_a:
-	dec a
-	lda loop_a
-	jnz a
-	jmp loop_b
+loop_r16:
+	subi r16, 1
+	brne loop_r16
+	jmp loop_r17
 
-loop_b:
-	dec b
-	lda loop_a
-	jnz b
-	jmp loop_c
+loop_r17:
+	subi r17, 1
+	brne loop_r16
+	jmp loop_r18
 
-loop_c:
-	dec c
-	lda loop_b
-	jnz c
-	jmp loop_d
+loop_r18:
+	subi r18, 1
+	brne loop_r17
+	jmp loop_r19
 
-loop_d:
-	dec d
-	jmp loop_c
+loop_r19:
+	subi r19, 1
+	jmp loop_r18

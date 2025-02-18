@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{CpuError, Instruction, Register};
+use crate::{register::RegisterPair16, CpuError, Flags, Instruction, Register};
 
 /// 64 KB
 const SRAM_SIZE: usize = 64 * 1024;
@@ -22,11 +22,10 @@ pub enum CpuStatus {
 #[derive(Debug, Clone)]
 pub struct Cpu {
 	program: Box<[Instruction]>,
-	registers: [u8; 8],
+	registers: [u8; Register::COUNT],
 	program_counter: u16,
 	stack_pointer: u16,
-	/// address pointer
-	hl: u16,
+	flags: Flags,
 	sram: [u8; SRAM_SIZE], // SRAM (64KB)
 	// contains the program address of the breakpoints
 	breakpoints: HashSet<u16>,
@@ -39,7 +38,7 @@ impl Cpu {
 			registers: [0; Register::COUNT],
 			program_counter: 0,
 			stack_pointer: STACK_START_ADDRESS,
-			hl: 0,
+			flags: Flags::default(),
 			sram: [0u8; SRAM_SIZE],
 			breakpoints: HashSet::new(),
 		}
@@ -47,11 +46,11 @@ impl Cpu {
 
 	/// resets everything except the last loaded program
 	pub fn reset(&mut self) {
-		self.program_counter = 0;
-		self.hl = 0;
-		self.stack_pointer = 0;
 		self.registers = [0; Register::COUNT];
+		self.program_counter = 0;
+		self.stack_pointer = STACK_START_ADDRESS;
 		self.sram = [0u8; SRAM_SIZE];
+		self.breakpoints.clear();
 	}
 
 	pub fn add_breakpoint(&mut self, address: u16) {
@@ -74,12 +73,20 @@ impl Cpu {
 		self.program.get(self.program_counter as usize).copied()
 	}
 
-	pub fn read_register(&self, reg: Register) -> u8 {
-		reg.read_from(&self.registers)
+	pub fn read_register(&self, reg: impl Into<Register>) -> u8 {
+		reg.into().read_from(&self.registers)
 	}
 
-	pub fn write_register(&mut self, reg: Register, value: u8) {
-		reg.write_in(&mut self.registers, value);
+	pub fn write_register(&mut self, reg: impl Into<Register>, value: u8) {
+		reg.into().write_in(&mut self.registers, value);
+	}
+
+	pub fn read_register_pair16(&self, reg_pair: RegisterPair16) -> u16 {
+		reg_pair.read_from(&self.registers)
+	}
+
+	pub fn write_register_pair16(&mut self, reg_pair: RegisterPair16, value: u16) {
+		reg_pair.write_in(&mut self.registers, value);
 	}
 
 	fn read_ram(&self, address: u16) -> Result<u8, CpuError> {
@@ -128,25 +135,35 @@ impl Cpu {
 		}
 
 		match instruction {
-			Instruction::Mw { reg, value } => {
-				let value = value.imm8_or_else(|reg| self.read_register(reg));
-				self.write_register(reg, value);
+			Instruction::Jmp { address } => {
+				self.program_counter = address.0;
+			}
+			Instruction::Eor { reg_dest, reg_read } => {
+				let result = self.read_register(reg_dest) ^ self.read_register(reg_read);
+				self.write_register(reg_dest, result);
+				self.flags.set_zns_v0(result);
 				self.program_counter += 1;
 			}
-			Instruction::Lw { register, address } => {
-				let value = self.read_ram(address.imm16_or_hl(self.hl))?;
-				self.write_register(register, value);
+			Instruction::Ldi { register, value } => {
+				self.write_register(register, value.0);
 				self.program_counter += 1;
 			}
-			Instruction::Sw { address, register } => {
-				let address = address.imm16_or_hl(self.hl);
-				let value = self.read_register(register);
-				self.write_ram(address, value)?;
+			Instruction::Mov { reg_dest, reg_read } => {
+				self.write_register(reg_dest, self.read_register(reg_read));
 				self.program_counter += 1;
 			}
-			Instruction::Push { value } => {
-				let value = value.imm8_or_else(|reg| self.read_register(reg));
-				self.push(value)?;
+			Instruction::Movw { reg_dest, reg_read } => {
+				let value = self.read_register_pair16(reg_read);
+				self.write_register_pair16(reg_dest, value);
+				self.program_counter += 1;
+			}
+			Instruction::RJmp { offset } => {
+				let new_program_counter =
+					(self.program_counter as i32).wrapping_add(offset as i32 + 1);
+				self.program_counter = new_program_counter as u16;
+			}
+			Instruction::Push { register } => {
+				self.push(self.read_register(register))?;
 				self.program_counter += 1;
 			}
 			Instruction::Pop { register } => {
@@ -154,46 +171,50 @@ impl Cpu {
 				self.write_register(register, value);
 				self.program_counter += 1;
 			}
-			Instruction::Lda { address } => {
-				self.hl = address.0;
+			Instruction::Cpi { register, value } => {
+				let register_value = self.read_register(register);
+				let result = register_value.wrapping_sub(value.0);
+				self.flags.set_sub_zns(register_value, value.0, result);
 				self.program_counter += 1;
 			}
-			Instruction::Jnz { value } => {
-				let value = value.imm8_or_else(|reg| self.read_register(reg));
-				if value != 0 {
-					self.program_counter = self.hl;
+			Instruction::Brne { offset } => {
+				if !self.flags.zero() {
+					let new_program_counter =
+						(self.program_counter as i32).wrapping_add(offset as i32 + 1);
+					self.program_counter = new_program_counter as u16;
 				} else {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Add { reg, value } => {
-				let reg_value = self.read_register(reg);
-				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
-				self.write_register(reg, reg_value.wrapping_add(other_value));
+			Instruction::Call { address } => {
+				// TODO: handle 16-bit PC, for now not needed
+				self.push(self.program_counter as u8 + 2)?;
+				self.program_counter = address.0;
+			}
+			Instruction::Ret {} => {
+				self.program_counter = self.pop()? as u16;
+			}
+			Instruction::Subi { register, value } => {
+				let register_value = self.read_register(register);
+				let result = register_value.wrapping_sub(value.0);
+				self.write_register(register, result);
+				self.flags.set_sub_zns(register_value, value.0, result);
 				self.program_counter += 1;
 			}
-			Instruction::Sub { reg, value } => {
-				let reg_value = self.read_register(reg);
-				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
-				self.write_register(reg, reg_value.wrapping_sub(other_value));
+			Instruction::Add { reg_dest, reg_read } => {
+				let dest_value = self.read_register(reg_dest);
+				let read_value = self.read_register(reg_read);
+				let result = dest_value.wrapping_add(read_value);
+				self.write_register(reg_dest, result);
+				self.flags.set_add_zns(dest_value, read_value, result);
 				self.program_counter += 1;
 			}
-			Instruction::And { reg, value } => {
-				let reg_value = self.read_register(reg);
-				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
-				self.write_register(reg, reg_value & other_value);
+			Instruction::Sts { address, register } => {
+				self.write_ram(address.0, self.read_register(register))?;
 				self.program_counter += 1;
 			}
-			Instruction::Or { reg, value } => {
-				let reg_value = self.read_register(reg);
-				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
-				self.write_register(reg, reg_value | other_value);
-				self.program_counter += 1;
-			}
-			Instruction::Nor { reg, value } => {
-				let reg_value = self.read_register(reg);
-				let other_value = value.imm8_or_else(|reg| self.read_register(reg));
-				self.write_register(reg, !(reg_value | other_value));
+			Instruction::Lds { register, address } => {
+				self.write_register(register, self.read_ram(address.0)?);
 				self.program_counter += 1;
 			}
 		}
@@ -219,73 +240,33 @@ impl Default for Cpu {
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::panic)]
 mod tests {
-	use crate::{
-		register::HlOrImm16,
-		Register::{C, D},
-		A, B,
-	};
+	use crate::Register::{R0, R1, R16};
 
 	use super::*;
 
 	#[test]
-	fn test_execute_move() {
-		let mut cpu = Cpu::default();
-		cpu.execute(Instruction::Mw {
-			reg: A,
-			value: 42.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], 42);
-	}
-
-	#[test]
-	fn test_execute_add_sub() {
-		let mut cpu = Cpu::default();
-		cpu.registers[0] = 42;
-		cpu.registers[1] = 23;
-		cpu.execute(Instruction::Add {
-			reg: A,
-			value: B.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], 42 + 23);
-		cpu.registers[0] = 42;
-		cpu.registers[1] = 23;
-		cpu.execute(Instruction::Sub {
-			reg: A,
-			value: B.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], 42 - 23);
-	}
-
-	#[test]
 	fn test_execute_push_pop() {
 		let mut cpu = Cpu::default();
-		cpu.write_register(A, 42);
-		cpu.write_register(B, 15);
-		cpu.execute(Instruction::Push { value: A.into() }).unwrap();
-		cpu.execute(Instruction::Push { value: B.into() }).unwrap();
-		cpu.write_register(A, 0);
-		cpu.write_register(B, 0);
-		cpu.execute(Instruction::Pop { register: B }).unwrap();
-		cpu.execute(Instruction::Pop { register: A }).unwrap();
-		assert_eq!(cpu.read_register(A), 42);
-		assert_eq!(cpu.read_register(B), 15);
+		cpu.write_register(R0, 42);
+		cpu.write_register(R1, 15);
+		cpu.execute(Instruction::Push { register: R0 }).unwrap();
+		cpu.execute(Instruction::Push { register: R1 }).unwrap();
+		cpu.write_register(R0, 0);
+		cpu.write_register(R1, 0);
+		cpu.execute(Instruction::Pop { register: R1 }).unwrap();
+		cpu.execute(Instruction::Pop { register: R0 }).unwrap();
+		assert_eq!(cpu.read_register(R0), 42);
+		assert_eq!(cpu.read_register(R1), 15);
 	}
 
 	#[test]
 	fn test_catch_write_directly_into_stack() {
 		let mut cpu = Cpu::default();
-		cpu.execute(Instruction::Mw {
-			reg: A,
-			value: 42.into(),
-		})
-		.unwrap();
+		cpu.write_register(R0, 42);
 		assert_eq!(
-			cpu.execute(Instruction::Sw {
+			cpu.execute(Instruction::Sts {
+				register: R0,
 				address: (STACK_START_ADDRESS - 1).into(),
-				register: A,
 			}),
 			Err(CpuError::InvalidRamAddress {
 				addr: STACK_START_ADDRESS - 1
@@ -296,8 +277,9 @@ mod tests {
 	#[test]
 	fn test_stackoverflow() {
 		let mut cpu = Cpu::default();
+		cpu.write_register(R0, 0);
 		loop {
-			match cpu.execute(Instruction::Push { value: 0.into() }) {
+			match cpu.execute(Instruction::Push { register: R0 }) {
 				Ok(_) => (),
 				Err(CpuError::StackOverflow) => break,
 				Err(err) => panic!("Unexpected error before stack overflow: {err}"),
@@ -309,124 +291,38 @@ mod tests {
 	fn test_stackunderflow() {
 		let mut cpu = Cpu::default();
 		assert_eq!(
-			cpu.execute(Instruction::Pop { register: A }),
+			cpu.execute(Instruction::Pop { register: R0 }),
 			Err(CpuError::StackUnderflow)
 		);
 	}
 
 	#[test]
-	fn test_execute_and() {
+	fn test_execute_jmp() {
 		let mut cpu = Cpu::default();
-		cpu.registers[0] = 42;
-		cpu.registers[1] = 23;
-		cpu.execute(Instruction::And {
-			reg: A,
-			value: B.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], 42 & 23);
-	}
-
-	#[test]
-	fn test_execute_or() {
-		let mut cpu = Cpu::default();
-		cpu.registers[0] = 42;
-		cpu.registers[1] = 23;
-		cpu.execute(Instruction::Or {
-			reg: A,
-			value: B.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], 42 | 23);
-	}
-
-	#[test]
-	fn test_execute_nor() {
-		let mut cpu = Cpu::default();
-		cpu.registers[0] = 42;
-		cpu.registers[1] = 23;
-		cpu.execute(Instruction::Nor {
-			reg: A,
-			value: B.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], !(42 | 23));
-	}
-
-	#[test]
-	fn test_execute_lda_jnz() {
-		let mut cpu = Cpu::default();
-		cpu.execute(Instruction::Lda { address: 42.into() })
+		cpu.execute(Instruction::Jmp { address: 42.into() })
 			.unwrap();
-		cpu.execute(Instruction::Jnz { value: 1.into() }).unwrap();
 		assert_eq!(cpu.program_counter, 42);
-	}
-
-	#[test]
-	fn test_execute_lw_sw() {
-		let magic_num = 42;
-		let address = 0x123;
-
-		let mut cpu = Cpu::default();
-		cpu.registers[0] = magic_num;
-		cpu.execute(Instruction::Sw {
-			register: A,
-			address: address.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.read_ram(address).unwrap(), magic_num);
-		cpu.registers[0] = 0;
-		cpu.execute(Instruction::Lw {
-			register: A,
-			address: address.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], magic_num);
-	}
-
-	#[test]
-	fn test_hl() {
-		let mut cpu = Cpu::default();
-		cpu.execute(Instruction::Lda {
-			address: 0x123.into(),
-		})
-		.unwrap();
-		assert_eq!(cpu.hl, 0x123);
-		cpu.registers[0] = 42;
-		cpu.execute(Instruction::Sw {
-			register: A,
-			address: HlOrImm16::Hl,
-		})
-		.unwrap();
-		assert_eq!(cpu.read_ram(cpu.hl).unwrap(), 42);
-		cpu.registers[0] = 0;
-		cpu.execute(Instruction::Lw {
-			register: A,
-			address: HlOrImm16::Hl,
-		})
-		.unwrap();
-		assert_eq!(cpu.registers[0], 42);
 	}
 
 	#[test]
 	fn test_breakpoint() {
 		let program = vec![
-			Instruction::Mw {
-				reg: A,
-				value: 0.into(),
+			Instruction::Ldi {
+				register: R16.try_into().unwrap(),
+				value: 42.into(),
 			},
-			Instruction::Mw {
-				reg: B,
-				value: 1.into(),
+			Instruction::Ldi {
+				register: R16.try_into().unwrap(),
+				value: 42.into(),
 			},
 			// breakpoint will be set here
-			Instruction::Mw {
-				reg: C,
-				value: 2.into(),
+			Instruction::Ldi {
+				register: R16.try_into().unwrap(),
+				value: 42.into(),
 			},
-			Instruction::Mw {
-				reg: D,
-				value: 3.into(),
+			Instruction::Ldi {
+				register: R16.try_into().unwrap(),
+				value: 42.into(),
 			},
 		];
 		let mut cpu = Cpu::new(program);
