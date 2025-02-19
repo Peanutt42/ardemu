@@ -1,3 +1,5 @@
+; decrements a 32 bit value using four 8-bit registers
+
 ldi r16, 255
 ldi r17, 255
 ldi r18, 255

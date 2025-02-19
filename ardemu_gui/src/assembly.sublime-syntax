@@ -1,0 +1,52 @@
+%YAML 1.2
+---
+name: AVR Assembly
+file_extensions:
+  - asm
+  - S
+  - inc
+scope: source.avrasm
+
+contexts:
+  main:
+    - match: \b([aA][dD][cC]|[aA][dD][dD]|[aA][dD][iI][wW]|[aA][nN][dD]|[aA][nN][dD][iI]|[aA][sS][rR]|[bB][cC][cC]|[bB][cC][lL][rR]|[bB][rB][aA][cC]|[bB][rB][gG][eE]|[bB][rB][hH][cC]|[bB][rB][iI][dD]|[bB][rB][lL][oO]|[bB][rB][lL][tT]|[bB][rB][mM][iI]|[bB][rB][nN][eE]|[bB][rB][pP][lL]|[bB][rB][sS][hH]|[bB][rB][tT][cC]|[bB][sS][eE][tT]|[cC][bB][iI]|[cC][bB][rB]|[cC][lL][cC]|[cC][lL][hH]|[cC][lL][iI]|[cC][lL][nN]|[cC][lL][rB]|[cC][lL][sS]|[cC][lL][tT]|[cC][lL][vV]|[cC][oO][mM]|[cC][pP]|[cC][pP][cC]|[cC][pP][iI]|[cC][pP][sS][eE]|[dD][eE][cC]|[eE][lL][pP][mM]|[eE][oO][rB]|[iI][nN]|[iI][nN][cC]|[jJ][mM][pP]|[lL][dD][dD]|[lL][dD][iI]|[lL][dD][sS]|[lL][pP][mM]|[lL][sS][lL]|[lL][sS][rB]|[mM][oO][vV]|[mM][oO][vV][wW]|[mM][uU][lL]|[mM][uU][lL][sS]|[mM][uU][lL][sS][uU]|[nN][eE][gG]|[nN][oO][pP]|[oO][rB]|[oO][rB][iI]|[oO][uU][tT]|[pP][oO][pP]|[pP][uU][sS][hH]|[rB][cC][aA][lL]|[rB][eE][tT]|[rB][eE][tT][iI]|[rB][jJ][mM][pP]|[rB][oO][lL]|[rB][oO][rB]|[sS][bB][cC]|[sS][bB][iI]|[sS][bB][iI][cC]|[sS][bB][iI][sS]|[sS][bB][rB]|[sS][bB][rB][sS]|[sS][eE][cC]|[sS][eE][hH]|[sS][eE][iI]|[sS][eE][nN]|[sS][eE][rB]|[sS][eE][sS]|[sS][eE][tT]|[sS][lL][eE][eE][pP]|[sS][pP][mM]|[sS][tT][dD]|[sS][uU][bB]|[sS][uU][bB][iI]|[sS][uU][bB][iI][cC]|[sS][uU][bB][iI][sS]|[sS][wW][aA][pP]|[tT][sS][tT]|[wW][dD][rB]|[xX][cC][hH]|[xX][oO][rB])\b
+      scope: keyword.control.avr
+      captures:
+        1: keyword.control.avr
+
+    # Registers (R0-R31, X/Y/Z pointers)
+    - match: \b[rR][0-3]?[0-9]\b|\b[XxYyZz]\b
+      scope: variable.language.register.avr
+
+    # Preprocessor directives
+    - match: ^\s*\.[a-zA-Z]+
+      scope: keyword.other.directive.avr
+      push:
+        - meta_scope: meta.preprocessor.avr
+        - match: $
+          pop: true
+
+    # Numbers (hex, binary, decimal)
+    - match: \b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b|\b\d+\b
+      scope: constant.numeric.avr
+
+    # Labels
+    - match: '^[a-zA-Z_][a-zA-Z0-9_]*:'
+      scope: entity.name.function.label.avr
+
+    # Comments
+    - match: ';.*$'
+      scope: comment.line.semicolon.avr
+
+    # Strings
+    - match: '"'
+      scope: punctuation.definition.string.begin.avr
+      push: string_content
+
+  string_content:
+    - meta_scope: string.quoted.double.avr
+    - match: '"'
+      scope: punctuation.definition.string.end.avr
+      pop: true
+    - match: '\\.'
+      scope: constant.character.escape.avr

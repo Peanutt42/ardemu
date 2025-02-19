@@ -10,7 +10,6 @@ use ardemu_core::{parse_asm, AsmParseError, Cpu, CpuStatus, Instruction, Registe
 use iced::{
 	alignment::Vertical,
 	border::rounded,
-	highlighter,
 	mouse::ScrollDelta,
 	widget::{
 		button, column, container, mouse_area, responsive, row, scrollable,
@@ -21,6 +20,9 @@ use iced::{
 	Length::{Fill, FillPortion},
 	Padding, Subscription, Theme,
 };
+
+#[allow(clippy::expect_used)]
+mod highlighter;
 
 #[derive(Debug, Clone)]
 enum CpuSimMessage {
@@ -180,14 +182,17 @@ impl App {
 			text("Assembly Editor:"),
 			container(scrollable(
 				text_editor(&self.asm_source_code_text_content)
-					.highlight("S", highlighter::Theme::Base16Eighties)
+					.highlight_with::<highlighter::Highlighter>(
+						highlighter::Settings {},
+						highlighter::Highlight::to_format,
+					)
 					.font(Font::MONOSPACE)
 					.style(text_editor_style)
 					.on_action(Message::AsmSourceCodeChanged),
 			))
 			.style(panel_style)
 			.width(Fill)
-			.height(if portrait { FillPortion(2) } else { Fill })
+			.height(if portrait { FillPortion(2) } else { Fill }),
 		]
 		.into()
 	}
@@ -536,7 +541,7 @@ fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_editor:
 	let palette = theme.extended_palette();
 
 	let active = text_editor::Style {
-		background: Color::from_rgb8(37, 37, 37).into(),
+		background: Color::from_rgb8(1, 4, 9).into(),
 		border: Border {
 			radius: 8.0.into(),
 			width: 0.0,
@@ -600,7 +605,7 @@ fn hidden_secondary_button_style(theme: &Theme, status: button::Status) -> butto
 
 fn panel_style(_theme: &Theme) -> container::Style {
 	container::Style {
-		background: Some(Color::from_rgb8(37, 37, 37).into()),
+		background: Some(Color::from_rgb8(1, 4, 9).into()),
 		border: rounded(8),
 		..Default::default()
 	}
@@ -608,7 +613,7 @@ fn panel_style(_theme: &Theme) -> container::Style {
 
 fn background_style(_theme: &Theme) -> container::Style {
 	container::Style {
-		background: Some(Color::from_rgb8(26, 26, 26).into()),
+		background: Some(Color::from_rgb8(5, 9, 21).into()),
 		..Default::default()
 	}
 }
