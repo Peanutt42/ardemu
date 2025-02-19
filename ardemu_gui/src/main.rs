@@ -321,6 +321,7 @@ impl App {
 									text!("{address:#06x} ").font(Font::MONOSPACE)
 								}
 							}
+							.height(Self::ROW_HEIGHT)
 							.into()
 						})))
 						.style(|_t| container::Style {
