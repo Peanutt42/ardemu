@@ -134,7 +134,8 @@ impl App {
 				self.memory_view_start_address_input = Some(new_input);
 			}
 			Message::ChangeMemoryViewStartAddress(address) => {
-				self.memory_view_start_address = address;
+				self.memory_view_start_address =
+					(address / Self::BYTES_PER_ROW) * Self::BYTES_PER_ROW;
 			}
 			Message::ChangeMemoryViewStartAddressFromInput => {
 				if let Some(new_address) =
@@ -147,7 +148,7 @@ impl App {
 								input.parse::<u16>().ok()
 							}
 						}) {
-					self.memory_view_start_address = new_address;
+					self.update(Message::ChangeMemoryViewStartAddress(new_address));
 				}
 			}
 		}
