@@ -31,6 +31,19 @@ impl std::fmt::Display for Imm8 {
 	}
 }
 
+macro_rules! display_register {
+	($type:ident, $($variant:ident),*) => {
+		impl std::fmt::Display for $type {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				match *self {
+					$($type::$variant => write!(f, "{}", stringify!($variant).to_lowercase()),)*
+				}
+			}
+		}
+	};
+}
+
+/// General purpose registers
 #[derive(
 	Debug,
 	Clone,
@@ -46,7 +59,6 @@ impl std::fmt::Display for Imm8 {
 )]
 #[repr(u8)]
 pub enum Register {
-	/* General purpose registers */
 	R0,
 	R1,
 	R2,
@@ -129,109 +141,159 @@ impl Register {
 	}
 }
 
-macro_rules! display_register {
-	($($variant:ident),*) => {
-		impl std::fmt::Display for Register {
-			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-				match *self {
-					$(Register::$variant => write!(f, "{}", stringify!($variant).to_lowercase()),)*
+display_register!(
+	Register, R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R16, R17, R18,
+	R19, R20, R21, R22, R23, R24, R25, R26, R27, R28, R29, R30, R31
+);
+
+macro_rules! map_register {
+	($src_type:ident, $dst_type:ident, $($variant:ident),*) => {
+		impl From<$src_type> for $dst_type {
+			fn from(value: $src_type) -> Self {
+				match value {
+					$($src_type::$variant => $dst_type::$variant,)*
+				}
+			}
+		}
+		impl TryFrom<$dst_type> for $src_type {
+			type Error = ();
+
+			fn try_from(value: $dst_type) -> Result<Self, Self::Error> {
+				match value {
+					$($dst_type::$variant => Ok($src_type::$variant),)*
+					_ => Err(()),
 				}
 			}
 		}
 	};
 }
+
+/// Upper register (R16-R31)
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Hash,
+	Ord,
+	IntoPrimitive,
+	TryFromPrimitive,
+	SelfRustTokenize,
+)]
+#[repr(u8)]
+pub enum UpperRegister {
+	R16,
+	R17,
+	R18,
+	R19,
+	R20,
+	R21,
+	R22,
+	R23,
+	R24,
+	R25,
+	R26,
+	R27,
+	R28,
+	R29,
+	R30,
+	R31,
+}
 display_register!(
-	R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, R16, R17, R18, R19, R20,
-	R21, R22, R23, R24, R25, R26, R27, R28, R29, R30, R31
+	UpperRegister,
+	R16,
+	R17,
+	R18,
+	R19,
+	R20,
+	R21,
+	R22,
+	R23,
+	R24,
+	R25,
+	R26,
+	R27,
+	R28,
+	R29,
+	R30,
+	R31
 );
-
-/// ensures that the register is a upper register (R16-R31)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
-pub struct UpperRegister(pub Register);
-
-impl UpperRegister {
-	pub fn new(register: Register) -> Option<Self> {
-		if register >= Register::R16 {
-			Some(Self(register))
-		} else {
-			None
-		}
-	}
-}
-
-impl TryFrom<Register> for UpperRegister {
-	type Error = ();
-
-	fn try_from(value: Register) -> Result<Self, Self::Error> {
-		Self::new(value).ok_or(())
-	}
-}
-
-impl From<UpperRegister> for Register {
-	fn from(value: UpperRegister) -> Self {
-		value.0
-	}
-}
-
-impl std::fmt::Display for UpperRegister {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
+map_register!(
+	UpperRegister,
+	Register,
+	R16,
+	R17,
+	R18,
+	R19,
+	R20,
+	R21,
+	R22,
+	R23,
+	R24,
+	R25,
+	R26,
+	R27,
+	R28,
+	R29,
+	R30,
+	R31
+);
 
 /// ensures that the register is any of:
 /// R24, R26, R28, R30
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
-pub struct WordRegister(pub Register);
-
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Hash,
+	Ord,
+	IntoPrimitive,
+	TryFromPrimitive,
+	SelfRustTokenize,
+)]
+#[repr(u8)]
+pub enum WordRegister {
+	R24,
+	R26,
+	R28,
+	R30,
+}
 impl WordRegister {
-	pub fn new(register: Register) -> Option<Self> {
-		if matches!(
-			register,
-			Register::R24 | Register::R26 | Register::R28 | Register::R30
-		) {
-			Some(Self(register))
-		} else {
-			None
-		}
-	}
-
-	/// should not fail, as the register is guaranteed to be valid
-	#[allow(clippy::unwrap_used)]
 	pub fn to_pair(self) -> RegisterPair16 {
-		RegisterPair16 {
-			high: self.0,
-			low: Register::try_from(self.0 as u8 + 1).unwrap(),
+		match self {
+			Self::R24 => RegisterPair16 {
+				high: Register::R25,
+				low: Register::R24,
+			},
+			Self::R26 => RegisterPair16 {
+				high: Register::R27,
+				low: Register::R26,
+			},
+			Self::R28 => RegisterPair16 {
+				high: Register::R29,
+				low: Register::R28,
+			},
+			Self::R30 => RegisterPair16 {
+				high: Register::R31,
+				low: Register::R30,
+			},
 		}
 	}
 }
-
-impl TryFrom<Register> for WordRegister {
-	type Error = ();
-
-	fn try_from(value: Register) -> Result<Self, Self::Error> {
-		Self::new(value).ok_or(())
-	}
-}
-
-impl From<WordRegister> for Register {
-	fn from(value: WordRegister) -> Self {
-		value.0
-	}
-}
-
-impl std::fmt::Display for WordRegister {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
+display_register!(WordRegister, R24, R26, R28, R30);
+map_register!(WordRegister, Register, R24, R26, R28, R30);
 
 /// combines value of two 8 bit registers into a 16 bit value
 /// high_register must always be low_register + 1, as the values must be stored continuously
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub struct RegisterPair16 {
-	high: Register,
-	low: Register,
+	pub high: Register,
+	pub low: Register,
 }
 
 impl RegisterPair16 {

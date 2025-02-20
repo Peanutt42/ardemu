@@ -359,7 +359,10 @@ impl Default for Cpu {
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::panic)]
 mod tests {
-	use crate::Register::{R0, R1, R16, R17};
+	use crate::{
+		Register::{R0, R1, R16, R17},
+		UpperRegister,
+	};
 
 	use super::*;
 
@@ -439,20 +442,20 @@ mod tests {
 	fn test_breakpoint() {
 		let program = vec![
 			Instruction::Ldi {
-				register: R16.try_into().unwrap(),
+				register: UpperRegister::R16,
 				value: 42.into(),
 			},
 			Instruction::Ldi {
-				register: R16.try_into().unwrap(),
+				register: UpperRegister::R16,
 				value: 42.into(),
 			},
 			// breakpoint will be set here
 			Instruction::Ldi {
-				register: R16.try_into().unwrap(),
+				register: UpperRegister::R16,
 				value: 42.into(),
 			},
 			Instruction::Ldi {
-				register: R16.try_into().unwrap(),
+				register: UpperRegister::R16,
 				value: 42.into(),
 			},
 		];

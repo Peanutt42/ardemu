@@ -68,12 +68,13 @@ fn parse_register(s: &str) -> Result<Register, AsmParseErrorType> {
 
 fn parse_upper_register(s: &str) -> Result<UpperRegister, AsmParseErrorType> {
 	let register = parse_register(s)?;
-	UpperRegister::new(register).ok_or(AsmParseErrorType::ExpectedUpperRegister(register))
+	UpperRegister::try_from(register)
+		.map_err(|_| AsmParseErrorType::ExpectedUpperRegister(register))
 }
 
 fn parse_word_register(s: &str) -> Result<WordRegister, AsmParseErrorType> {
 	let register = parse_register(s)?;
-	WordRegister::new(register).ok_or(AsmParseErrorType::ExpectedWordRegister(register))
+	WordRegister::try_from(register).map_err(|_| AsmParseErrorType::ExpectedWordRegister(register))
 }
 
 fn parse_register_pair(s: &str) -> Result<RegisterPair16, AsmParseErrorType> {
@@ -489,8 +490,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-	use crate::Register::R28;
-	use crate::{parse_asm, AsmParseError, AsmParseErrorType};
+	use crate::{parse_asm, AsmParseError, AsmParseErrorType, UpperRegister, WordRegister};
 	use crate::{Instruction, RegisterPair16, R0, R1, R16, R17, R24, R30};
 
 	#[test]
@@ -536,7 +536,7 @@ mod tests {
 					reg_read: R1
 				},
 				Instruction::Ldi {
-					register: R16.try_into().unwrap(),
+					register: UpperRegister::R16,
 					value: 0.into()
 				},
 				Instruction::Mov {
@@ -551,7 +551,7 @@ mod tests {
 				Instruction::Push { register: R0 },
 				Instruction::Pop { register: R0 },
 				Instruction::Cpi {
-					register: R16.try_into().unwrap(),
+					register: UpperRegister::R16,
 					value: 1.into()
 				},
 				Instruction::Cpc {
@@ -575,15 +575,15 @@ mod tests {
 					reg_read: R17
 				},
 				Instruction::Subi {
-					register: R16.try_into().unwrap(),
+					register: UpperRegister::R16,
 					value: 1.into()
 				},
 				Instruction::Sbci {
-					register: R16.try_into().unwrap(),
+					register: UpperRegister::R16,
 					value: 1.into()
 				},
 				Instruction::Sbiw {
-					register: R28.try_into().unwrap(),
+					register: WordRegister::R28,
 					value: 42.into()
 				},
 				Instruction::Dec { register: R16 },
@@ -596,7 +596,7 @@ mod tests {
 					reg_read: R17
 				},
 				Instruction::Adiw {
-					register: R28.try_into().unwrap(),
+					register: WordRegister::R28,
 					value: 42.into()
 				},
 				Instruction::Inc { register: R16 },
@@ -605,7 +605,7 @@ mod tests {
 					reg_read: R17
 				},
 				Instruction::Andi {
-					register: R16.try_into().unwrap(),
+					register: UpperRegister::R16,
 					value: 1.into()
 				},
 				Instruction::Sts {
