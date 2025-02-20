@@ -62,6 +62,10 @@ impl Cpu {
 		&self.breakpoints
 	}
 
+	pub fn flags(&self) -> Flags {
+		self.flags
+	}
+
 	pub fn get_program_counter(&self) -> u16 {
 		self.program_counter
 	}
@@ -227,7 +231,7 @@ impl Cpu {
 			}
 			Instruction::Call { address } => {
 				// TODO: handle 16-bit PC, for now not needed
-				self.push(self.program_counter as u8 + 2)?;
+				self.push(self.program_counter as u8 + 1)?;
 				self.program_counter = address.0;
 			}
 			Instruction::Ret {} => {

@@ -1,20 +1,41 @@
 use ardemu_asm_parse_macro::include_asm;
 use ardemu_core::{
 	Cpu, CpuStatus,
-	Register::{R16, R20},
+	Register::{R16, R20, R26},
+	RegisterPair16,
 };
+
+fn testing_fib(n: usize) -> usize {
+	if n == 0 || n == 1 {
+		return n;
+	}
+
+	testing_fib(n - 1) + testing_fib(n - 2)
+}
 
 #[test]
 fn fib() {
-	let mut cpu = Cpu::new(include_asm!("src/fib.asm"));
+	for n in 0..=10 {
+		let mut cpu = Cpu::new(include_asm!("src/fib.asm"));
+		cpu.write_register(R16, n as u8);
 
-	let n = 10;
+		while matches!(cpu.step().unwrap(), CpuStatus::Normal) {}
 
-	cpu.write_register(R16, n);
+		let result = cpu.read_register(R20) as usize;
+		assert_eq!(result, testing_fib(n));
+	}
+}
 
-	while matches!(cpu.step(), Ok(CpuStatus::Normal)) {}
+#[test]
+fn fib16() {
+	for n in 0..=24 {
+		let mut cpu = Cpu::new(include_asm!("src/fib16.asm"));
+		cpu.write_register(R16, n as u8);
 
-	let result = cpu.read_register(R20);
+		while matches!(cpu.step().unwrap(), CpuStatus::Normal) {}
 
-	assert_eq!(result, 55);
+		let result = cpu.read_register_pair16(RegisterPair16::new(R26).unwrap()) as usize;
+
+		assert_eq!(result, testing_fib(n));
+	}
 }

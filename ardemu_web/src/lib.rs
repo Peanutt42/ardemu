@@ -1,6 +1,7 @@
 use ardemu_core::{
 	parse_asm, Cpu, CpuStatus,
-	Register::{self, R20},
+	Register::{self, R26},
+	RegisterPair16,
 };
 use wasm_bindgen::prelude::*;
 
@@ -35,7 +36,7 @@ pub fn evaluate(source_code: &str) -> String {
 		.collect::<Vec<String>>()
 		.join(", ");
 
-	let result = cpu.read_register(R20);
+	let result = cpu.read_register_pair16(RegisterPair16::new(R26).unwrap());
 	format!(
 		"{instructions_str}\n\n{cpu_register_str}\n\nEvaluated to {}",
 		result

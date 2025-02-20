@@ -19,6 +19,15 @@ impl Flags {
 	pub fn zero(&self) -> bool {
 		self.zero
 	}
+	pub fn negative(&self) -> bool {
+		self.negative
+	}
+	pub fn sign(&self) -> bool {
+		self.sign
+	}
+	pub fn overflow(&self) -> bool {
+		self.overflow
+	}
 	pub fn carry(&self) -> bool {
 		self.carry
 	}
@@ -26,8 +35,8 @@ impl Flags {
 	pub fn carry_u8(&self) -> u8 {
 		self.carry as u8
 	}
-	pub fn sign(&self) -> bool {
-		self.sign
+	pub fn half_carry(&self) -> bool {
+		self.half_carry
 	}
 
 	fn set_zns(&mut self, result: u8) {

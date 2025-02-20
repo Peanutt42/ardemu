@@ -1,18 +1,9 @@
-import init, * as wasm from "./pkg/ardemu_web.js";
-
-await init();
-
-const output = document.querySelector(".output-pane");
-
-const editor = document.getElementById("editor");
-editor.value = `; 16-bit Fibonacci:
+; 16-bit Fibonacci:
 ; r16: n
 ; r21:r20: next
 ; r23:r22: current
 ; r25:r24: prev
 ; r27:r26: result
-
-ldi r16, 24            ; change n here!
 
 inc r16                ; n++
 
@@ -37,12 +28,4 @@ loop:
     movw r22, r20     ; current = next
 
     dec r16           ; n--
-    brne loop         ; while n != 0`;
-
-editor.addEventListener("input", () => evaluate());
-
-evaluate();
-
-function evaluate() {
-	output.textContent = wasm.evaluate(editor.value);
-}
+    brne loop         ; while n != 0

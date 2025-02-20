@@ -46,7 +46,7 @@ struct App {
 
 impl Default for App {
 	fn default() -> Self {
-		let asm_source_code = include_str!("count_down.asm").to_string();
+		let asm_source_code = include_str!("fib16.asm").to_string();
 		let asm_output = parse_asm(&asm_source_code);
 		let cpu = match asm_output.as_ref() {
 			Ok(program) => Cpu::new(program.clone()),
@@ -192,7 +192,7 @@ impl App {
 					.on_action(Message::AsmSourceCodeChanged),
 			))
 			.style(panel_style)
-			.width(Fill)
+			.width(if portrait { Fill } else { FillPortion(2) })
 			.height(if portrait { FillPortion(2) } else { Fill }),
 		]
 		.into()
@@ -261,7 +261,11 @@ impl App {
 			})
 			.style(panel_style),
 		]
-		.width(if portrait { FillPortion(2) } else { Fill })
+		.width(if portrait {
+			FillPortion(3)
+		} else {
+			FillPortion(2)
+		})
 		.spacing(5)
 		.into()
 	}
@@ -273,10 +277,33 @@ impl App {
 				Column::with_children(Register::ALL.iter().map(|reg| {
 					let value = cpu.read_register(*reg);
 
-					text(format!("{reg} = {value:#04x}"))
+					text(format!("{reg}: {value:#04x}"))
 						.font(Font::MONOSPACE)
 						.into()
 				}))
+				.spacing(10)
+				.padding(10)
+				.width(Fill)
+			))
+			.style(panel_style)
+		]
+		.width(Fill)
+		.spacing(5)
+		.into()
+	}
+
+	fn flags_pane(&self, cpu: &Cpu) -> Element<Message> {
+		column![
+			text("Flags:"),
+			container(scrollable(
+				column![
+					row![text!("Z: {}", cpu.flags().zero() as u8).font(Font::MONOSPACE)],
+					row![text!("N: {}", cpu.flags().negative() as u8).font(Font::MONOSPACE)],
+					row![text!("S: {}", cpu.flags().sign() as u8).font(Font::MONOSPACE)],
+					row![text!("V: {}", cpu.flags().overflow() as u8).font(Font::MONOSPACE)],
+					row![text!("H: {}", cpu.flags().half_carry() as u8).font(Font::MONOSPACE)],
+					row![text!("C: {}", cpu.flags().carry() as u8).font(Font::MONOSPACE)]
+				]
 				.spacing(10)
 				.padding(10)
 				.width(Fill)
@@ -404,7 +431,7 @@ impl App {
 			}))
 			.style(panel_style)
 		]
-		.width(if portrait { FillPortion(2) } else { Fill })
+		.width(if portrait { FillPortion(3) } else { Fill })
 		.spacing(5)
 		.into()
 	}
@@ -414,16 +441,17 @@ impl App {
 
 		let instruction_pane = self.instructions_pane(cpu, portrait);
 		let register_pane = self.registers_pane(cpu);
+		let flags_pane = self.flags_pane(cpu);
 		let memory_pane = self.memory_pane(cpu, portrait);
 
 		let panes: Element<Message> = if portrait {
-			row![instruction_pane, register_pane, memory_pane,]
+			row![instruction_pane, register_pane, flags_pane, memory_pane,]
 				.spacing(20)
 				.height(FillPortion(1))
 				.into()
 		} else {
 			column![
-				row![instruction_pane, register_pane,]
+				row![instruction_pane, register_pane, flags_pane]
 					.spacing(20)
 					.height(Fill),
 				container(memory_pane).height(Fill),
