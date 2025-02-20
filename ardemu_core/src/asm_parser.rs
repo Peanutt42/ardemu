@@ -1,6 +1,6 @@
 use crate::{
 	register::{RegisterPair16, UpperRegister},
-	AsmParseError, AsmParseErrorType, Instruction, Register,
+	AsmParseError, AsmParseErrorType, Instruction, Register, WordRegister,
 };
 use std::collections::HashMap;
 
@@ -71,6 +71,11 @@ fn parse_upper_register(s: &str) -> Result<UpperRegister, AsmParseErrorType> {
 	UpperRegister::new(register).ok_or(AsmParseErrorType::ExpectedUpperRegister(register))
 }
 
+fn parse_word_register(s: &str) -> Result<WordRegister, AsmParseErrorType> {
+	let register = parse_register(s)?;
+	WordRegister::new(register).ok_or(AsmParseErrorType::ExpectedWordRegister(register))
+}
+
 fn parse_register_pair(s: &str) -> Result<RegisterPair16, AsmParseErrorType> {
 	let low_register = parse_register(s)?;
 	RegisterPair16::new(low_register).ok_or(AsmParseErrorType::InvalidRegisterPairLowRegister)
@@ -107,7 +112,9 @@ fn consume_operands<'a, 'b, const N: usize>(
 enum IntermediateInstruction {
 	Jmp { symbol: String, line_number: usize },
 	Call { symbol: String, line_number: usize },
+	Breq { symbol: String, line_number: usize },
 	Brne { symbol: String, line_number: usize },
+	Brlt { symbol: String, line_number: usize },
 	Instruction(Instruction),
 }
 impl IntermediateInstruction {
@@ -136,10 +143,22 @@ impl IntermediateInstruction {
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Call {
 				address: address.into(),
 			}),
+			Self::Breq {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Breq {
+				offset: (address as i32 - program_address as i32) as i8 - 1,
+			}),
 			Self::Brne {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brne {
+				offset: (address as i32 - program_address as i32) as i8 - 1,
+			}),
+			Self::Brlt {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brlt {
 				offset: (address as i32 - program_address as i32) as i8 - 1,
 			}),
 			Self::Instruction(instruction) => Ok(instruction),
@@ -234,10 +253,35 @@ fn parse_instruction(
 			);
 			Ok(())
 		}
+		"CPC" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Cpc { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"BREQ" => {
+			let operands = consume_operands::<1>(operands)?;
+			let symbol = operands[0].to_string();
+			output_instruction.push(IntermediateInstruction::Breq {
+				symbol,
+				line_number,
+			});
+			Ok(())
+		}
 		"BRNE" => {
 			let operands = consume_operands::<1>(operands)?;
 			let symbol = operands[0].to_string();
 			output_instruction.push(IntermediateInstruction::Brne {
+				symbol,
+				line_number,
+			});
+			Ok(())
+		}
+		"BRLT" => {
+			let operands = consume_operands::<1>(operands)?;
+			let symbol = operands[0].to_string();
+			output_instruction.push(IntermediateInstruction::Brlt {
 				symbol,
 				line_number,
 			});
@@ -256,6 +300,20 @@ fn parse_instruction(
 			output_instruction.push(Instruction::Ret {}.into());
 			Ok(())
 		}
+		"SUB" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Sub { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"SBC" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Sbc { reg_dest, reg_read }.into());
+			Ok(())
+		}
 		"SUBI" => {
 			let operands = consume_operands::<2>(operands)?;
 			let register = parse_upper_register(operands[0])?;
@@ -269,11 +327,89 @@ fn parse_instruction(
 			);
 			Ok(())
 		}
+		"SBCI" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_upper_register(operands[0])?;
+			let value = parse_number(operands[1])? as u8;
+			output_instruction.push(
+				Instruction::Sbci {
+					register,
+					value: value.into(),
+				}
+				.into(),
+			);
+			Ok(())
+		}
+		"SBIW" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_word_register(operands[0])?;
+			let value = parse_number(operands[1])? as u16;
+			output_instruction.push(
+				Instruction::Sbiw {
+					register,
+					value: value.into(),
+				}
+				.into(),
+			);
+			Ok(())
+		}
+		"DEC" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Dec { register }.into());
+			Ok(())
+		}
 		"ADD" => {
 			let operands = consume_operands::<2>(operands)?;
 			let reg_dest = parse_register(operands[0])?;
 			let reg_read = parse_register(operands[1])?;
 			output_instruction.push(Instruction::Add { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"ADC" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Adc { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"ADIW" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_word_register(operands[0])?;
+			let value = parse_number(operands[1])? as u16;
+			output_instruction.push(
+				Instruction::Adiw {
+					register,
+					value: value.into(),
+				}
+				.into(),
+			);
+			Ok(())
+		}
+		"INC" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Inc { register }.into());
+			Ok(())
+		}
+		"AND" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::And { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"ANDI" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_upper_register(operands[0])?;
+			let value = parse_number(operands[1])? as u8;
+			output_instruction.push(
+				Instruction::Andi {
+					register,
+					value: value.into(),
+				}
+				.into(),
+			);
 			Ok(())
 		}
 		"STS" => {
@@ -353,8 +489,9 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+	use crate::Register::R28;
 	use crate::{parse_asm, AsmParseError, AsmParseErrorType};
-	use crate::{Instruction, RegisterPair16, R0, R1, R16, R24, R30};
+	use crate::{Instruction, RegisterPair16, R0, R1, R16, R17, R24, R30};
 
 	#[test]
 	fn test_parse_asm() {
@@ -370,11 +507,24 @@ mod tests {
 				push r0
 				pop r0
 				cpi r16, 1
+				cpc r16, r17
+				breq begin
 				brne begin
+				brlt begin
 				call begin    ; would also be a infinitive loop
 				ret
+				sub r16, r17
+				sbc r16, r17
 				subi r16, 1
-				add r16, r16
+				sbci r16, 1
+				sbiw r28, 42
+				dec r16
+				add r16, r17
+				adc r16, r17
+				adiw r28, 42
+				inc r16
+				and r16, r17
+				andi r16, 1
 				sts 0x042, r0
 				lds r0, 0x042
 				",
@@ -404,17 +554,59 @@ mod tests {
 					register: R16.try_into().unwrap(),
 					value: 1.into()
 				},
+				Instruction::Cpc {
+					reg_dest: R16,
+					reg_read: R17
+				},
 				// update offset, if relative offset to 'begin' changes in the source code
-				Instruction::Brne { offset: -10 },
+				Instruction::Breq { offset: -11 },
+				// update offset, if relative offset to 'begin' changes in the source code
+				Instruction::Brne { offset: -12 },
+				// update offset, if relative offset to 'begin' changes in the source code
+				Instruction::Brlt { offset: -13 },
 				Instruction::Call { address: 0.into() },
 				Instruction::Ret {},
+				Instruction::Sub {
+					reg_dest: R16,
+					reg_read: R17
+				},
+				Instruction::Sbc {
+					reg_dest: R16,
+					reg_read: R17
+				},
 				Instruction::Subi {
 					register: R16.try_into().unwrap(),
 					value: 1.into()
 				},
+				Instruction::Sbci {
+					register: R16.try_into().unwrap(),
+					value: 1.into()
+				},
+				Instruction::Sbiw {
+					register: R28.try_into().unwrap(),
+					value: 42.into()
+				},
+				Instruction::Dec { register: R16 },
 				Instruction::Add {
 					reg_dest: R16,
-					reg_read: R16
+					reg_read: R17
+				},
+				Instruction::Adc {
+					reg_dest: R16,
+					reg_read: R17
+				},
+				Instruction::Adiw {
+					register: R28.try_into().unwrap(),
+					value: 42.into()
+				},
+				Instruction::Inc { register: R16 },
+				Instruction::And {
+					reg_dest: R16,
+					reg_read: R17
+				},
+				Instruction::Andi {
+					register: R16.try_into().unwrap(),
+					value: 1.into()
 				},
 				Instruction::Sts {
 					address: 0x042.into(),

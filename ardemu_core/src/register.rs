@@ -179,6 +179,53 @@ impl std::fmt::Display for UpperRegister {
 	}
 }
 
+/// ensures that the register is any of:
+/// R24, R26, R28, R30
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
+pub struct WordRegister(pub Register);
+
+impl WordRegister {
+	pub fn new(register: Register) -> Option<Self> {
+		if matches!(
+			register,
+			Register::R24 | Register::R26 | Register::R28 | Register::R30
+		) {
+			Some(Self(register))
+		} else {
+			None
+		}
+	}
+
+	/// should not fail, as the register is guaranteed to be valid
+	#[allow(clippy::unwrap_used)]
+	pub fn to_pair(self) -> RegisterPair16 {
+		RegisterPair16 {
+			high: self.0,
+			low: Register::try_from(self.0 as u8 + 1).unwrap(),
+		}
+	}
+}
+
+impl TryFrom<Register> for WordRegister {
+	type Error = ();
+
+	fn try_from(value: Register) -> Result<Self, Self::Error> {
+		Self::new(value).ok_or(())
+	}
+}
+
+impl From<WordRegister> for Register {
+	fn from(value: WordRegister) -> Self {
+		value.0
+	}
+}
+
+impl std::fmt::Display for WordRegister {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
 /// combines value of two 8 bit registers into a 16 bit value
 /// high_register must always be low_register + 1, as the values must be stored continuously
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
@@ -195,15 +242,25 @@ impl RegisterPair16 {
 		Some(Self { high, low })
 	}
 
+	/// [low, high]
+	pub(crate) fn u8s_from_u16(value: u16) -> [u8; 2] {
+		let low_value = value as u8;
+		let high_value = (value >> 8) as u8;
+		[low_value, high_value]
+	}
+
+	pub(crate) fn u8s_to_u16(low: u8, high: u8) -> u16 {
+		(low as u16) | (high as u16) << 8
+	}
+
 	/// this will not panic, enforced by the type
 	pub fn read_from(&self, registers: &[u8; Register::COUNT]) -> u16 {
-		(registers[self.high as usize] * u8::MAX) as u16 + registers[self.low as usize] as u16
+		Self::u8s_to_u16(registers[self.low as usize], registers[self.high as usize])
 	}
 
 	/// this will not panic, enforced by the type
 	pub fn write_in(&self, registers: &mut [u8; Register::COUNT], value: u16) {
-		let high_value = (value >> 8) as u8;
-		let low_value = value as u8;
+		let [low_value, high_value] = Self::u8s_from_u16(value);
 		registers[self.high as usize] = high_value;
 		registers[self.low as usize] = low_value;
 	}
@@ -212,5 +269,17 @@ impl RegisterPair16 {
 impl std::fmt::Display for RegisterPair16 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}:{}", self.high, self.low)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use crate::RegisterPair16;
+
+	#[test]
+	fn test_u16_u8s_conversion() {
+		let value_16 = 60000;
+		let [low, high] = RegisterPair16::u8s_from_u16(value_16);
+		assert_eq!(value_16, RegisterPair16::u8s_to_u16(low, high));
 	}
 }

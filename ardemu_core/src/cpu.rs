@@ -166,8 +166,9 @@ impl Cpu {
 				self.program_counter += 1;
 			}
 			Instruction::RJmp { offset } => {
-				let new_program_counter =
-					(self.program_counter as i32).wrapping_add(offset as i32 + 1);
+				let new_program_counter = (self.program_counter as i32)
+					.wrapping_add(offset as i32)
+					.wrapping_add(1);
 				self.program_counter = new_program_counter as u16;
 			}
 			Instruction::Push { register } => {
@@ -185,10 +186,40 @@ impl Cpu {
 				self.flags.set_sub_zns(register_value, value.0, result);
 				self.program_counter += 1;
 			}
+			Instruction::Cpc { reg_dest, reg_read } => {
+				let dest_value = self.read_register(reg_dest);
+				let read_value = self.read_register(reg_read);
+				let result = dest_value
+					.wrapping_sub(read_value)
+					.wrapping_sub(self.flags.carry_u8());
+				self.flags.set_sub_zns(dest_value, read_value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Breq { offset } => {
+				if self.flags.zero() {
+					let new_program_counter = (self.program_counter as i32)
+						.wrapping_add(offset as i32)
+						.wrapping_add(1);
+					self.program_counter = new_program_counter as u16;
+				} else {
+					self.program_counter += 1;
+				}
+			}
 			Instruction::Brne { offset } => {
 				if !self.flags.zero() {
-					let new_program_counter =
-						(self.program_counter as i32).wrapping_add(offset as i32 + 1);
+					let new_program_counter = (self.program_counter as i32)
+						.wrapping_add(offset as i32)
+						.wrapping_add(1);
+					self.program_counter = new_program_counter as u16;
+				} else {
+					self.program_counter += 1;
+				}
+			}
+			Instruction::Brlt { offset } => {
+				if self.flags.sign() {
+					let new_program_counter = (self.program_counter as i32)
+						.wrapping_add(offset as i32)
+						.wrapping_add(1);
 					self.program_counter = new_program_counter as u16;
 				} else {
 					self.program_counter += 1;
@@ -202,11 +233,52 @@ impl Cpu {
 			Instruction::Ret {} => {
 				self.program_counter = self.pop()? as u16;
 			}
+			Instruction::Sub { reg_dest, reg_read } => {
+				let dest_value = self.read_register(reg_dest);
+				let read_value = self.read_register(reg_read);
+				let result = dest_value.wrapping_sub(read_value);
+				self.write_register(reg_dest, result);
+				self.flags.set_sub_zns(dest_value, read_value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Sbc { reg_dest, reg_read } => {
+				let dest_value = self.read_register(reg_dest);
+				let read_value = self.read_register(reg_read);
+				let result = dest_value
+					.wrapping_sub(read_value)
+					.wrapping_sub(self.flags.carry_u8());
+				self.write_register(reg_dest, result);
+				self.flags.set_sub_zns(dest_value, read_value, result);
+				self.program_counter += 1;
+			}
 			Instruction::Subi { register, value } => {
 				let register_value = self.read_register(register);
 				let result = register_value.wrapping_sub(value.0);
 				self.write_register(register, result);
 				self.flags.set_sub_zns(register_value, value.0, result);
+				self.program_counter += 1;
+			}
+			Instruction::Sbci { register, value } => {
+				let register_value = self.read_register(register);
+				let result = register_value
+					.wrapping_sub(value.0)
+					.wrapping_sub(self.flags.carry_u8());
+				self.write_register(register, result);
+				self.flags.set_sub_rzns(register_value, value.0, result);
+				self.program_counter += 1;
+			}
+			Instruction::Sbiw { register, value } => {
+				let register_value = self.read_register_pair16(register.to_pair());
+				let result = register_value.wrapping_sub(value.0);
+				self.write_register_pair16(register.to_pair(), result);
+				self.flags.set_zns16(result);
+				self.program_counter += 1;
+			}
+			Instruction::Dec { register } => {
+				let register_value = self.read_register(register);
+				let result = register_value.wrapping_sub(1);
+				self.write_register(register, result);
+				self.flags.set_sub_zns(register_value, 1, result);
 				self.program_counter += 1;
 			}
 			Instruction::Add { reg_dest, reg_read } => {
@@ -215,6 +287,45 @@ impl Cpu {
 				let result = dest_value.wrapping_add(read_value);
 				self.write_register(reg_dest, result);
 				self.flags.set_add_zns(dest_value, read_value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Adc { reg_dest, reg_read } => {
+				let dest_value = self.read_register(reg_dest);
+				let read_value = self.read_register(reg_read);
+				let result = dest_value
+					.wrapping_add(read_value)
+					.wrapping_add(self.flags.carry_u8());
+				self.write_register(reg_dest, result);
+				self.flags.set_add_zns(dest_value, read_value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Adiw { register, value } => {
+				let register_value = self.read_register_pair16(register.to_pair());
+				let result = register_value.wrapping_add(value.0);
+				self.write_register_pair16(register.to_pair(), result);
+				self.flags.set_zns16(result);
+				self.program_counter += 1;
+			}
+			Instruction::Inc { register } => {
+				let register_value = self.read_register(register);
+				let result = register_value.wrapping_add(1);
+				self.write_register(register, result);
+				self.flags.set_add_zns(register_value, 1, result);
+				self.program_counter += 1;
+			}
+			Instruction::And { reg_dest, reg_read } => {
+				let dest_value = self.read_register(reg_dest);
+				let read_value = self.read_register(reg_read);
+				let result = dest_value & read_value;
+				self.write_register(reg_dest, result);
+				self.flags.set_zns_v0(result);
+				self.program_counter += 1;
+			}
+			Instruction::Andi { register, value } => {
+				let register_value = self.read_register(register);
+				let result = register_value & value.0;
+				self.write_register(register, result);
+				self.flags.set_zns_v0(result);
 				self.program_counter += 1;
 			}
 			Instruction::Sts { address, register } => {
@@ -248,7 +359,7 @@ impl Default for Cpu {
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::panic)]
 mod tests {
-	use crate::Register::{R0, R1, R16};
+	use crate::Register::{R0, R1, R16, R17};
 
 	use super::*;
 
@@ -310,6 +421,18 @@ mod tests {
 		cpu.execute(Instruction::Jmp { address: 42.into() })
 			.unwrap();
 		assert_eq!(cpu.program_counter, 42);
+	}
+
+	#[test]
+	fn test_register_pair() {
+		let n: u16 = 0xFEFF;
+		let mut cpu = Cpu::default();
+		// R16:R17, little endian
+		let register_pair = RegisterPair16::new(R16).unwrap();
+		cpu.write_register_pair16(register_pair, n);
+		assert_eq!(cpu.read_register(R16), 0xFF);
+		assert_eq!(cpu.read_register(R17), 0xFE);
+		assert_eq!(cpu.read_register_pair16(register_pair), n);
 	}
 
 	#[test]

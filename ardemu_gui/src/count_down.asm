@@ -6,20 +6,20 @@ ldi r18, 255
 ldi r19, 255
 
 loop_r16:
-	subi r16, 1
+	dec r16
 	brne loop_r16
 	jmp loop_r17
 
 loop_r17:
-	subi r17, 1
+	dec r17
 	brne loop_r16
 	jmp loop_r18
 
 loop_r18:
-	subi r18, 1
+	dec r18
 	brne loop_r17
 	jmp loop_r19
 
 loop_r19:
-	subi r19, 1
+	dec r19
 	jmp loop_r18

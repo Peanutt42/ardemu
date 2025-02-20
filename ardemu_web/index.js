@@ -10,15 +10,12 @@ editor.value = `; r16 is n
 ; r18 is n2
 ; r19 is n3
 ; r20 is result
-; r21 is 1
 
 ldi r16, 10                 ; n = 10
-
 ldi r17, 0                  ; n1 = 0
 ldi r18, 1                  ; n2 = 1
 
-ldi r21, 1                  ; r21 = 1
-add r16, r21
+inc r16                     ; n++
 
 loop:                       ; while n > 0
     mov r20, r17            ; result = n1
@@ -26,7 +23,7 @@ loop:                       ; while n > 0
     add r19, r18            ; n3 += n2
     mov r17, r18            ; n1 = n2
     mov r18, r19            ; n2 = n3
-    subi r16, 1             ; n--
+    dec r16                 ; n--
     brne loop               ; if n > 0, continue
 
 ; result is in r20`;
