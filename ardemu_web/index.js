@@ -26,18 +26,16 @@ ldi r23, 0x00
 loop:
     movw r26, r24      ; result = prev
 
-    ; 16-bit add: next = prev + current
-    mov r20, r24
-    add r20, r22
-    mov r21, r25
+    movw r20, r24      ; next = prev
+
+    add r20, r22       ; 16-bit add: next += current
     adc r21, r23
 
-    movw r24, r22     ; prev = current
+    movw r24, r22      ; prev = current
+    movw r22, r20      ; current = next
 
-    movw r22, r20     ; current = next
-
-    dec r16           ; n--
-    brne loop         ; while n != 0`;
+    dec r16            ; n--
+    brne loop          ; while n != 0`;
 
 editor.addEventListener("input", () => evaluate());
 
