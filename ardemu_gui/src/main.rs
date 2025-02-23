@@ -13,7 +13,7 @@ use iced::{
 		button, column, container, mouse_area, responsive, row, scrollable, text, text_editor,
 		text_input, Column, Row,
 	},
-	window, Border, Color, Element, Font,
+	window, Color, Element, Font,
 	Length::{Fill, FillPortion},
 	Padding, Subscription, Theme,
 };
@@ -24,6 +24,15 @@ use std::{
 
 #[allow(clippy::expect_used)]
 mod highlighter;
+
+mod style;
+use style::{
+	background_style, button_style, format_big_number, hidden_secondary_button_style, panel_style,
+	text_editor_style,
+};
+
+mod code_editor;
+use code_editor::{code_editor_keybindings, unindent_text};
 
 #[derive(Debug, Clone)]
 struct CpuSim {
@@ -87,6 +96,7 @@ enum Message {
 	SimulateCpu(bool),
 	Step,
 	AsmSourceCodeChanged(text_editor::Action),
+	AsmSourceCodeUnindent,
 	UpdateCpuState,
 	AddBreakpoint(u16),
 	RemoveBreakpoint(u16),
@@ -132,6 +142,11 @@ impl App {
 					self.asm_output = parse_asm(&self.asm_source_code_text_content.text());
 					self.update(Message::ResetCpu);
 				}
+			}
+			Message::AsmSourceCodeUnindent => {
+				unindent_text(&mut self.asm_source_code_text_content);
+				self.asm_output = parse_asm(&self.asm_source_code_text_content.text());
+				self.update(Message::ResetCpu);
 			}
 			Message::UpdateCpuState => {
 				self.cpu_sim.update();
@@ -201,7 +216,11 @@ impl App {
 					)
 					.font(Font::MONOSPACE)
 					.style(text_editor_style)
-					.on_action(Message::AsmSourceCodeChanged),
+					.on_action(Message::AsmSourceCodeChanged)
+					.key_binding(move |key_press| code_editor_keybindings(
+						key_press,
+						Message::AsmSourceCodeUnindent
+					)),
 			))
 			.style(panel_style)
 			.width(if portrait { Fill } else { FillPortion(2) })
@@ -605,100 +624,6 @@ fn cpu_simulation_thread(
 			}
 		}
 	}
-}
-
-fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
-	let palette = theme.extended_palette();
-
-	let active = text_editor::Style {
-		background: Color::from_rgb8(1, 4, 9).into(),
-		border: Border {
-			radius: 8.0.into(),
-			width: 0.0,
-			color: palette.background.strong.color,
-		},
-		icon: palette.background.weak.text,
-		placeholder: palette.background.strong.color,
-		value: palette.background.base.text,
-		selection: palette.primary.weak.color,
-	};
-
-	match status {
-		text_editor::Status::Active => active,
-		text_editor::Status::Hovered => text_editor::Style {
-			border: Border {
-				color: palette.background.base.text,
-				..active.border
-			},
-			..active
-		},
-		text_editor::Status::Focused => text_editor::Style {
-			border: Border {
-				color: palette.primary.strong.color,
-				..active.border
-			},
-			..active
-		},
-		text_editor::Status::Disabled => text_editor::Style {
-			background: palette.background.weak.color.into(),
-			value: active.placeholder,
-			..active
-		},
-	}
-}
-
-fn button_style(theme: &Theme, status: button::Status) -> button::Style {
-	let color_pair = match status {
-		button::Status::Active => theme.extended_palette().primary.strong,
-		button::Status::Hovered | button::Status::Pressed | button::Status::Disabled => {
-			theme.extended_palette().primary.weak
-		}
-	};
-
-	button::Style {
-		background: Some(color_pair.color.into()),
-		text_color: color_pair.text,
-		border: rounded(8),
-		..Default::default()
-	}
-}
-
-fn hidden_secondary_button_style(theme: &Theme, status: button::Status) -> button::Style {
-	match status {
-		button::Status::Active | button::Status::Disabled => button::Style {
-			background: None,
-			..button::secondary(theme, status)
-		},
-		button::Status::Hovered | button::Status::Pressed => button::secondary(theme, status),
-	}
-}
-
-fn panel_style(_theme: &Theme) -> container::Style {
-	container::Style {
-		background: Some(Color::from_rgb8(1, 4, 9).into()),
-		border: rounded(8),
-		..Default::default()
-	}
-}
-
-fn background_style(_theme: &Theme) -> container::Style {
-	container::Style {
-		background: Some(Color::from_rgb8(5, 9, 21).into()),
-		..Default::default()
-	}
-}
-
-/// formats 1000000 into "1.000.000"
-#[allow(clippy::unwrap_used)] // string -> int parsing with string already generated from valid number
-fn format_big_number(n: usize) -> String {
-	n.to_string()
-		.as_bytes()
-		.rchunks(3)
-		.rev()
-		.map(std::str::from_utf8)
-		.collect::<Result<Vec<&str>, _>>()
-		.unwrap()
-		.join(",")
 }
 
 fn main() -> iced::Result {
