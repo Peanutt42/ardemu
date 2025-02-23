@@ -4,25 +4,33 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
-use std::sync::mpsc::{Receiver, TryRecvError};
-
 use ardemu_core::{parse_asm, AsmParseError, Cpu, CpuStatus, Instruction, Register};
 use iced::{
 	alignment::Vertical,
 	border::rounded,
 	mouse::ScrollDelta,
 	widget::{
-		button, column, container, mouse_area, responsive, row, scrollable,
-		scrollable::{Direction, Scrollbar},
-		text, text_editor, text_input, Column, Row,
+		button, column, container, mouse_area, responsive, row, scrollable, text, text_editor,
+		text_input, Column, Row,
 	},
 	window, Border, Color, Element, Font,
 	Length::{Fill, FillPortion},
 	Padding, Subscription, Theme,
 };
+use std::{
+	sync::mpsc::{Receiver, TryRecvError},
+	time::Instant,
+};
 
 #[allow(clippy::expect_used)]
 mod highlighter;
+
+#[derive(Debug, Clone)]
+struct CpuSim {
+	cpu: Cpu,
+	/// Instructions processed per second
+	instr_per_second: usize,
+}
 
 #[derive(Debug, Clone)]
 enum CpuSimMessage {
@@ -36,7 +44,7 @@ enum CpuSimMessage {
 #[derive(Debug)]
 struct App {
 	simulate_cpu: bool,
-	cpu: triple_buffer::Output<Cpu>,
+	cpu_sim: triple_buffer::Output<CpuSim>,
 	cpu_sim_message_sender: std::sync::mpsc::Sender<CpuSimMessage>,
 	memory_view_start_address: u16,
 	memory_view_start_address_input: Option<String>,
@@ -52,13 +60,17 @@ impl Default for App {
 			Ok(program) => Cpu::new(program.clone()),
 			Err(_) => Cpu::default(),
 		};
-		let (writable_cpu_buffer, readable_cpu_buffer) = triple_buffer::triple_buffer(&cpu);
+		let cpu_sim = CpuSim {
+			cpu: cpu.clone(),
+			instr_per_second: 0,
+		};
+		let (writable_cpu_sim, readable_cpu_sim) = triple_buffer::triple_buffer(&cpu_sim);
 		let (sender, receiver) = std::sync::mpsc::channel();
 
-		std::thread::spawn(|| cpu_simulation_thread(cpu, receiver, writable_cpu_buffer));
+		std::thread::spawn(move || cpu_simulation_thread(receiver, cpu, writable_cpu_sim));
 
 		Self {
-			cpu: readable_cpu_buffer,
+			cpu_sim: readable_cpu_sim,
 			simulate_cpu: false,
 			cpu_sim_message_sender: sender,
 			memory_view_start_address: 0,
@@ -122,7 +134,7 @@ impl App {
 				}
 			}
 			Message::UpdateCpuState => {
-				self.cpu.update();
+				self.cpu_sim.update();
 			}
 			Message::AddBreakpoint(address) => {
 				self.send_cpu_sim_message(CpuSimMessage::AddBreakpoint(address));
@@ -423,7 +435,9 @@ impl App {
 								})
 							}),
 						)
-						.direction(Direction::Horizontal(Scrollbar::new()))
+						.direction(scrollable::Direction::Horizontal(
+							scrollable::Scrollbar::new()
+						))
 					]
 					.padding(10)
 				]
@@ -437,7 +451,8 @@ impl App {
 	}
 
 	fn simulation_pane(&self, portrait: bool) -> Element<Message> {
-		let cpu = self.cpu.peek_output_buffer();
+		let cpu_sim = self.cpu_sim.peek_output_buffer();
+		let cpu = &cpu_sim.cpu;
 
 		let instruction_pane = self.instructions_pane(cpu, portrait);
 		let register_pane = self.registers_pane(cpu);
@@ -474,6 +489,19 @@ impl App {
 				.style(button_style)
 				.on_press(Message::SimulateCpu(!self.simulate_cpu)),
 				button("Step").style(button_style).on_press(Message::Step),
+				container(
+					text!(
+						"Instructions/sec = {}",
+						format_big_number(cpu_sim.instr_per_second)
+					)
+					.font(Font::MONOSPACE)
+				)
+				.padding(5)
+				.style(move |t: &Theme| container::Style {
+					background: Some(t.extended_palette().background.weak.color.into()),
+					border: rounded(8),
+					..Default::default()
+				})
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),
@@ -486,13 +514,16 @@ impl App {
 }
 
 fn cpu_simulation_thread(
-	mut cpu: Cpu,
 	receiver: Receiver<CpuSimMessage>,
-	mut writable_cpu_buffer: triple_buffer::Input<Cpu>,
+	mut cpu: Cpu,
+	mut writable_cpu_sim: triple_buffer::Input<CpuSim>,
 ) {
 	let mut simulate_cpu = false;
 
 	loop {
+		let start = Instant::now();
+		let mut instructions_processed = 0;
+
 		if simulate_cpu {
 			const BULK_STEP_COUNT: usize = 1_000_000;
 			for _ in 0..BULK_STEP_COUNT {
@@ -512,9 +543,14 @@ fn cpu_simulation_thread(
 					}
 				}
 			}
+			instructions_processed += BULK_STEP_COUNT;
 		}
 
-		writable_cpu_buffer.write(cpu.clone());
+		writable_cpu_sim.write(CpuSim {
+			cpu: cpu.clone(),
+			instr_per_second: (instructions_processed as f64 / start.elapsed().as_secs_f64())
+				as usize,
+		});
 
 		loop {
 			let simulate_cpu_copy = simulate_cpu;
@@ -546,7 +582,11 @@ fn cpu_simulation_thread(
 					}
 				}
 
-				writable_cpu_buffer.write(cpu.clone());
+				writable_cpu_sim.write(CpuSim {
+					cpu: cpu.clone(),
+					// single instruction is not recorded
+					instr_per_second: 0,
+				});
 			};
 
 			if simulate_cpu_copy {
@@ -646,6 +686,19 @@ fn background_style(_theme: &Theme) -> container::Style {
 		background: Some(Color::from_rgb8(5, 9, 21).into()),
 		..Default::default()
 	}
+}
+
+/// formats 1000000 into "1.000.000"
+#[allow(clippy::unwrap_used)] // string -> int parsing with string already generated from valid number
+fn format_big_number(n: usize) -> String {
+	n.to_string()
+		.as_bytes()
+		.rchunks(3)
+		.rev()
+		.map(std::str::from_utf8)
+		.collect::<Result<Vec<&str>, _>>()
+		.unwrap()
+		.join(",")
 }
 
 fn main() -> iced::Result {
