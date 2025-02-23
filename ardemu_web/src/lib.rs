@@ -24,6 +24,7 @@ pub fn evaluate(source_code: &str) -> String {
 			Ok(status) => match status {
 				CpuStatus::Normal => {}
 				CpuStatus::BreakpointHit => return "Breakpoint hit!".to_string(),
+				CpuStatus::BreakHit => return "Break hit!".to_string(),
 				CpuStatus::ProgramFinished => break,
 			},
 			Err(e) => return format!("{e:?}"),

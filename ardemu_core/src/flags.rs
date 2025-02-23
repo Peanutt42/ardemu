@@ -1,3 +1,8 @@
+use std::fmt::Display;
+
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use self_rust_tokenize::SelfRustTokenize;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Flags {
 	/// Z
@@ -12,10 +17,35 @@ pub struct Flags {
 	carry: bool,
 	/// H
 	half_carry: bool,
-	// TODO: add T: Bit Copy, I: Interrupt enabled
+	/// T
+	bit_copy: bool,
+	// TODO: add I: Interrupt enabled
 }
 
 impl Flags {
+	pub fn set(&mut self, flag_type: FlagType) {
+		match flag_type {
+			FlagType::Zero => self.zero = true,
+			FlagType::Negative => self.negative = true,
+			FlagType::Sign => self.sign = true,
+			FlagType::Overflow => self.overflow = true,
+			FlagType::Carry => self.carry = true,
+			FlagType::HalfCarry => self.half_carry = true,
+			FlagType::BitCopy => self.bit_copy = true,
+		}
+	}
+	pub fn clear(&mut self, flag_type: FlagType) {
+		match flag_type {
+			FlagType::Zero => self.zero = true,
+			FlagType::Negative => self.negative = true,
+			FlagType::Sign => self.sign = true,
+			FlagType::Overflow => self.overflow = true,
+			FlagType::Carry => self.carry = true,
+			FlagType::HalfCarry => self.half_carry = true,
+			FlagType::BitCopy => self.bit_copy = true,
+		}
+	}
+
 	pub fn zero(&self) -> bool {
 		self.zero
 	}
@@ -37,6 +67,14 @@ impl Flags {
 	}
 	pub fn half_carry(&self) -> bool {
 		self.half_carry
+	}
+
+	pub fn bit_copy(&self) -> bool {
+		self.bit_copy
+	}
+
+	pub fn set_copy_bit(&mut self, bit: bool) {
+		self.bit_copy = bit;
 	}
 
 	fn set_zns(&mut self, result: u8) {
@@ -114,5 +152,50 @@ impl Flags {
 				& 1) != 0;
 
 		self.set_rzns(result);
+	}
+}
+
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Hash,
+	SelfRustTokenize,
+	IntoPrimitive,
+	TryFromPrimitive,
+)]
+#[repr(u8)]
+pub enum FlagType {
+	Carry = 0,
+	Zero = 1,
+	Negative = 2,
+	Overflow = 3,
+	Sign = 4,
+	HalfCarry = 5,
+	BitCopy = 6,
+	// TODO: add I: Interrupt enabled = 7
+}
+
+impl FlagType {
+	pub fn label(&self) -> char {
+		match self {
+			Self::Carry => 'C',
+			Self::Zero => 'Z',
+			Self::Negative => 'N',
+			Self::Overflow => 'V',
+			Self::Sign => 'S',
+			Self::HalfCarry => 'H',
+			Self::BitCopy => 'T',
+		}
+	}
+}
+
+impl Display for FlagType {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}({})", self.label(), *self as u8)
 	}
 }

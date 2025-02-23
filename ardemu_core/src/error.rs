@@ -58,4 +58,8 @@ pub enum AsmParseErrorType {
 	ExpectedWordRegister(Register),
 	#[error("Invalid low register for 16 bit value register pair cannot be r31, as there is no r32 to be the high register")]
 	InvalidRegisterPairLowRegister,
+	#[error("invalid cpu flag: {0}, expect 0-7")]
+	InvalidCpuFlag(String),
+	#[error("expected bit location (0-7), not {0}")]
+	ExpectedBitLocation(String),
 }

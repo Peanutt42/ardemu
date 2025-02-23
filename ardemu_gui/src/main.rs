@@ -46,6 +46,7 @@ enum CpuSimMessage {
 	ResetAndLoadProgram(Vec<Instruction>),
 	SetSimulating(bool),
 	Step,
+	Skip,
 	AddBreakpoint(u16),
 	RemoveBreakpoint(u16),
 }
@@ -95,6 +96,7 @@ enum Message {
 	ResetCpu,
 	SimulateCpu(bool),
 	Step,
+	Skip,
 	AsmSourceCodeChanged(text_editor::Action),
 	AsmSourceCodeUnindent,
 	UpdateCpuState,
@@ -135,6 +137,7 @@ impl App {
 				));
 			}
 			Message::Step => self.send_cpu_sim_message(CpuSimMessage::Step),
+			Message::Skip => self.send_cpu_sim_message(CpuSimMessage::Skip),
 			Message::AsmSourceCodeChanged(action) => {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
@@ -405,7 +408,7 @@ impl App {
 									let end_address = start_address + Self::BYTES_PER_ROW - 1;
 
 									let data_view: Element<Message> =
-										match cpu.inspect_ram_range(start_address..=end_address) {
+										match cpu.read_ram_range(start_address..=end_address) {
 											Ok(data) => Row::with_children(
 												(0..Self::BYTES_PER_ROW).map(|byte_index| {
 													let byte_value = data[byte_index as usize];
@@ -508,6 +511,7 @@ impl App {
 				.style(button_style)
 				.on_press(Message::SimulateCpu(!self.simulate_cpu)),
 				button("Step").style(button_style).on_press(Message::Step),
+				button("Skip").style(button_style).on_press(Message::Skip),
 				container(
 					text!(
 						"Instructions/sec = {}",
@@ -549,7 +553,7 @@ fn cpu_simulation_thread(
 				match cpu.step() {
 					Ok(cpu_status) => match cpu_status {
 						CpuStatus::Normal => {}
-						CpuStatus::BreakpointHit => {
+						CpuStatus::BreakpointHit | CpuStatus::BreakHit => {
 							break;
 						}
 						CpuStatus::ProgramFinished => {
@@ -581,7 +585,7 @@ fn cpu_simulation_thread(
 					}
 					CpuSimMessage::Step => match cpu.step() {
 						Ok(cpu_status) => match cpu_status {
-							CpuStatus::Normal | CpuStatus::BreakpointHit => {}
+							CpuStatus::Normal | CpuStatus::BreakpointHit | CpuStatus::BreakHit => {}
 							CpuStatus::ProgramFinished => {
 								println!("Program finished");
 							}
@@ -590,6 +594,9 @@ fn cpu_simulation_thread(
 							eprintln!("failed to step cpu: {e}");
 						}
 					},
+					CpuSimMessage::Skip => {
+						cpu.skip();
+					}
 					CpuSimMessage::SetSimulating(simulating) => {
 						simulate_cpu = simulating;
 					}

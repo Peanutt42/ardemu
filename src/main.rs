@@ -32,6 +32,10 @@ fn main() {
 					println!("breakpoint hit");
 					break;
 				}
+				CpuStatus::BreakHit => {
+					println!("break hit");
+					break;
+				}
 				CpuStatus::ProgramFinished => {
 					break;
 				}

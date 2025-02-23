@@ -31,6 +31,29 @@ impl std::fmt::Display for Imm8 {
 	}
 }
 
+/// 3-bit value: 0-7
+/// used for setting a specific bit in byte
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
+pub struct Imm3(pub u8);
+
+impl TryFrom<u8> for Imm3 {
+	type Error = ();
+
+	fn try_from(value: u8) -> Result<Self, Self::Error> {
+		if value < 8 {
+			Ok(Self(value))
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl std::fmt::Display for Imm3 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
 macro_rules! display_register {
 	($type:ident, $($variant:ident),*) => {
 		impl std::fmt::Display for $type {

@@ -1,20 +1,33 @@
 use crate::{
 	register::{Imm16, Imm8, RegisterPair16, UpperRegister},
-	Register, WordRegister,
+	FlagType, Imm3, Register, WordRegister,
 };
 use ardemu_display_instr_macro::DisplayInstruction;
 use self_rust_tokenize::SelfRustTokenize;
 
 #[derive(Debug, DisplayInstruction, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub enum Instruction {
+	/// No operation
+	Nop {},
+	/// Break will pause execution, returning CpuStatus
+	Break {},
 	/// jump to absolute address: PC = address
 	Jmp { address: Imm16 },
-	/// Computes result of reg_dest ^ reg_read and stores it in reg_dest
+	/// Logical or and stores it in reg_dest
+	/// reg_dest = reg_dest | reg_read
+	Or {
+		reg_dest: Register,
+		reg_read: Register,
+	},
+	/// Logical or of register and immediate, stores it in reg_dest
+	/// register = register | value
+	Ori { register: Register, value: Imm8 },
+	/// Logical exclusive or and stores it in reg_dest
+	/// reg_dest = reg_dest ^ reg_read
 	Eor {
 		reg_dest: Register,
 		reg_read: Register,
 	},
-	/* ============ TODO: out ============ */
 	/// load immediate value into upper register: register = value
 	Ldi {
 		register: UpperRegister,
@@ -49,9 +62,20 @@ pub enum Instruction {
 		register: UpperRegister,
 		value: Imm8,
 	},
+	/// compares register values (no write to register)
+	/// reg_dest - reg_read
+	Cp {
+		reg_dest: Register,
+		reg_read: Register,
+	},
 	/// compares register values with carry (no write to register)
 	/// reg_dest - reg_read - carry
 	Cpc {
+		reg_dest: Register,
+		reg_read: Register,
+	},
+	/// compares registers and skips next instruction if equal
+	Cpse {
 		reg_dest: Register,
 		reg_read: Register,
 	},
@@ -144,9 +168,21 @@ pub enum Instruction {
 		register: UpperRegister,
 		value: Imm8,
 	},
+	/// set cpu flag
+	Bset { flag_type: FlagType },
+	/// clear cpu flag
+	Bclr { flag_type: FlagType },
+	/// bit store from bit in register to T bit in SREG (FlagType::BitCopy)
+	Bst { register: Register, bit: Imm3 },
+	/// bit load T bit in SREG (FlagType::BitCopy) into bit in register
+	Bld { register: Register, bit: Imm3 },
 	/// store value of register into sram address
 	Sts { address: Imm16, register: Register },
 	/// load value from sram address into register
 	Lds { register: Register, address: Imm16 },
-	/* ============ TODO: sei, in, ori, reti, cli, sbi ============ */
+	/// load value from sram address into register
+	In { register: Register, address: Imm8 },
+	/// store value of register into sram address
+	Out { address: Imm8, register: Register },
+	/* ============ TODO: sei, reti, cli, sbi ============ */
 }

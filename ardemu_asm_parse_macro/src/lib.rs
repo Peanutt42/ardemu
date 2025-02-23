@@ -14,7 +14,7 @@ pub fn parse_asm(input: TokenStream) -> TokenStream {
 				.collect::<Vec<_>>();
 			quote! {
 				{
-					use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, RegisterPair16, Imm8, Imm16};
+					use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, RegisterPair16, Imm3, Imm8, Imm16};
 
 					[ #(#instruction_tokens),* ]
 				}
@@ -52,7 +52,7 @@ pub fn include_asm(input: TokenStream) -> TokenStream {
 
 					quote! {
 						{
-							use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, RegisterPair16, Imm8, Imm16};
+							use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, RegisterPair16, Imm3, Imm8, Imm16};
 
 							/// this will make the compiler recompile when the file changes
 							const _RECOMPILE_IF_CHANGED_HANDLE: &str = include_str!(#asm_filepath_str);
