@@ -62,4 +62,6 @@ pub enum AsmParseErrorType {
 	InvalidCpuFlag(String),
 	#[error("expected bit location (0-7), not {0}")]
 	ExpectedBitLocation(String),
+	#[error("invalid io address: {0}, expected 0x00-0x1F (Register IO space)")]
+	InvalidRegisterIoAddress(String),
 }

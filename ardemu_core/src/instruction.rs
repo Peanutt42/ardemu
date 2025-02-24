@@ -28,6 +28,29 @@ pub enum Instruction {
 		reg_dest: Register,
 		reg_read: Register,
 	},
+	/// One's complement of register and stores it in register
+	/// register = 0xFF - register
+	Com { register: Register },
+	/// Negate value: Two's complement of register and stores it in register
+	/// register = 0x00 - register
+	Neg { register: Register },
+	/// Swap high and low nibbles of register and stores it in register
+	/// register = (register >> 4) | (register << 4)     // rotate right by 4 bits: "half"
+	Swap { register: Register },
+	/// Logical shift right of register and stores it in register
+	/// register = register >> 1
+	Lsr { register: Register },
+	/// Logical rotate right of register through carry and stores it in register
+	/// C -> register (bits shifted one to the right) -> C
+	Ror { register: Register },
+	/// Arithmetic shift right of register: shifts all bits to the right, bit 7 stays constant, bit 0 is loaded into carry
+	Asr { register: Register },
+	/// Multiply unsigned 8 bit values and stores 16 bit result in R1:R0
+	/// R1:R0 = reg_dest * reg_read
+	Mul {
+		reg_dest: Register,
+		reg_read: Register,
+	},
 	/// load immediate value into upper register: register = value
 	Ldi {
 		register: UpperRegister,
@@ -172,6 +195,10 @@ pub enum Instruction {
 	Bset { flag_type: FlagType },
 	/// clear cpu flag
 	Bclr { flag_type: FlagType },
+	/// Set bit in register (argument is the limited io address 0x00 - 0x1F)
+	Sbi { register: Register, bit: Imm3 },
+	/// Clear bit in register (argument is the limited io address 0x00 - 0x1F)
+	Cbi { register: Register, bit: Imm3 },
 	/// bit store from bit in register to T bit in SREG (FlagType::BitCopy)
 	Bst { register: Register, bit: Imm3 },
 	/// bit load T bit in SREG (FlagType::BitCopy) into bit in register
@@ -184,5 +211,4 @@ pub enum Instruction {
 	In { register: Register, address: Imm8 },
 	/// store value of register into sram address
 	Out { address: Imm8, register: Register },
-	/* ============ TODO: sei, reti, cli, sbi ============ */
 }

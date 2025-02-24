@@ -154,6 +154,55 @@ impl Cpu {
 				self.flags.set_zns_v0(result);
 				self.program_counter += 1;
 			}
+			Instruction::Com { register } => {
+				let result = 0xFF - self.read_register(register);
+				self.write_register(register, result);
+				self.flags.set_zns_v0(result);
+				self.program_counter += 1;
+			}
+			Instruction::Neg { register } => {
+				let value = self.read_register(register);
+				let result = 0x0 - value;
+				self.write_register(register, result);
+				self.flags.set_neg_zns(value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Swap { register } => {
+				let value = self.read_register(register);
+				let result = value.rotate_right(4);
+				self.write_register(register, result);
+				self.program_counter += 1;
+			}
+			Instruction::Lsr { register } => {
+				let value = self.read_register(register);
+				let result = value >> 1;
+				self.write_register(register, result);
+				self.flags.set_lsr_zcvs(value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Ror { register } => {
+				let value = self.read_register(register);
+				let carry_bit = if self.flags.carry() { 0x80 } else { 0x00 };
+				let result = carry_bit | (value >> 1);
+				self.write_register(register, result);
+				self.flags.set_zcvns(value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Asr { register } => {
+				let value = self.read_register(register);
+				let result = (value >> 1) | (value & 0x80);
+				self.write_register(register, result);
+				self.flags.set_zcvns(value, result);
+				self.program_counter += 1;
+			}
+			Instruction::Mul { reg_dest, reg_read } => {
+				let dest_value = self.read_register(reg_dest);
+				let read_value = self.read_register(reg_read);
+				let result: u16 = dest_value as u16 * read_value as u16;
+				self.write_register_pair16(RegisterPair16::R1R0, result);
+				self.flags.set_mul_zc(result);
+				self.program_counter += 1;
+			}
 			Instruction::Or { reg_dest, reg_read } => {
 				let result = self.read_register(reg_dest) | self.read_register(reg_read);
 				self.write_register(reg_dest, result);
@@ -362,6 +411,16 @@ impl Cpu {
 			}
 			Instruction::Bclr { flag_type } => {
 				self.flags.clear(flag_type);
+				self.program_counter += 1;
+			}
+			Instruction::Sbi { register, bit } => {
+				let value = self.read_register(register);
+				self.write_register(register, set_bit_in_u8(value, bit.0, true));
+				self.program_counter += 1;
+			}
+			Instruction::Cbi { register, bit } => {
+				let value = self.read_register(register);
+				self.write_register(register, set_bit_in_u8(value, bit.0, false));
 				self.program_counter += 1;
 			}
 			Instruction::Bst { register, bit } => {

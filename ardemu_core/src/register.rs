@@ -320,6 +320,11 @@ pub struct RegisterPair16 {
 }
 
 impl RegisterPair16 {
+	pub const R1R0: Self = Self {
+		high: Register::R1,
+		low: Register::R0,
+	};
+
 	/// only fails if register is the low register is the last register,
 	/// as there is no register after it to store the high value
 	pub fn new(low: Register) -> Option<Self> {

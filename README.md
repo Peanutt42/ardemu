@@ -2,6 +2,7 @@
 
 ![ardemu_gui](ardemu_gui/Screenshot.png)
 
+## Sample: Fibonacci Sequence
 `fib.asm`:
 ```asm
 ; r16 is n
@@ -49,3 +50,8 @@ fn main() {
 	assert_eq!(result, 55);
 }
 ```
+
+## Resources
+- [Atmel AVR Instruction Manual](https://ww1.microchip.com/downloads/aemDocuments/documents/MCU08/ProductDocuments/ReferenceManuals/AVR-InstructionSet-Manual-DS40002198.pdf): main source of reference material for AVR instruction set and expected behaviour
+- [AVR Instruction Set WIKI](https://en.wikipedia.org/wiki/Atmel_AVR_instruction_set): simple, quick overview
+- [simavr](https://github.com/buserror/simavr/): emulation implementations of low level arithmetic instructions and handling of their cpu flags

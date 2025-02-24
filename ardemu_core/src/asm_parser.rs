@@ -1,3 +1,5 @@
+use num_enum::TryFromPrimitive;
+
 use crate::{
 	register::{RegisterPair16, UpperRegister},
 	AsmParseError, AsmParseErrorType, FlagType, Imm3, Instruction, Register, WordRegister,
@@ -94,6 +96,11 @@ fn parse_bit_location(s: &str) -> Result<Imm3, AsmParseErrorType> {
 		.parse::<u8>()
 		.map_err(|_| AsmParseErrorType::ExpectedBitLocation(s.to_string()))?;
 	Imm3::try_from(bit_num).map_err(|_| AsmParseErrorType::ExpectedBitLocation(s.to_string()))
+}
+
+fn parse_register_as_io_address(s: &str) -> Result<Register, AsmParseErrorType> {
+	Register::try_from_primitive(parse_number(s)? as u8)
+		.map_err(|_| AsmParseErrorType::InvalidRegisterIoAddress(s.to_string()))
 }
 
 fn split_mnemonic_operands(line: &str) -> (String, Vec<&str>) {
@@ -216,6 +223,49 @@ fn parse_instruction(
 			let reg_dest = parse_register(operands[0])?;
 			let reg_read = parse_register(operands[1])?;
 			output_instruction.push(Instruction::Eor { reg_dest, reg_read }.into());
+			Ok(())
+		}
+		"COM" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Com { register }.into());
+			Ok(())
+		}
+		"NEG" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Neg { register }.into());
+			Ok(())
+		}
+		"SWAP" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Swap { register }.into());
+			Ok(())
+		}
+		"LSR" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Lsr { register }.into());
+			Ok(())
+		}
+		"ROR" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Ror { register }.into());
+			Ok(())
+		}
+		"ASR" => {
+			let operands = consume_operands::<1>(operands)?;
+			let register = parse_register(operands[0])?;
+			output_instruction.push(Instruction::Asr { register }.into());
+			Ok(())
+		}
+		"MUL" => {
+			let operands = consume_operands::<2>(operands)?;
+			let reg_dest = parse_register(operands[0])?;
+			let reg_read = parse_register(operands[1])?;
+			output_instruction.push(Instruction::Mul { reg_dest, reg_read }.into());
 			Ok(())
 		}
 		"OR" => {
@@ -481,6 +531,20 @@ fn parse_instruction(
 			output_instruction.push(Instruction::Bclr { flag_type }.into());
 			Ok(())
 		}
+		"SBI" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_register_as_io_address(operands[0])?;
+			let bit = parse_bit_location(operands[1])?;
+			output_instruction.push(Instruction::Sbi { register, bit }.into());
+			Ok(())
+		}
+		"CBI" => {
+			let operands = consume_operands::<2>(operands)?;
+			let register = parse_register_as_io_address(operands[0])?;
+			let bit = parse_bit_location(operands[1])?;
+			output_instruction.push(Instruction::Cbi { register, bit }.into());
+			Ok(())
+		}
 		"BST" => {
 			let operands = consume_operands::<2>(operands)?;
 			let register = parse_register(operands[0])?;
@@ -598,6 +662,7 @@ pub fn parse_asm(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+	use crate::Register::R31;
 	use crate::{
 		parse_asm, AsmParseError, AsmParseErrorType, FlagType, UpperRegister, WordRegister,
 	};
@@ -614,6 +679,13 @@ mod tests {
 				or r1, r1
 				ori r1, 0
 				eor r1, r1
+				com r0
+				neg r0
+				swap r0
+				lsr r0
+				ror r0
+				asr r0
+				mul r1, r0
 				ldi r16, 0
 				mov r0, r1
 				movw r30, r24 ; r31:r30 = r25:r24
@@ -643,6 +715,8 @@ mod tests {
 				andi r16, 1
 				bset 1
 				bclr 1
+				sbi 0x1f, 0
+				cbi 0x1f, 0
 				bst r16, 1
 				bld r16, 1
 				sts 0x042, r0
@@ -666,6 +740,16 @@ mod tests {
 				Instruction::Eor {
 					reg_dest: R1,
 					reg_read: R1
+				},
+				Instruction::Com { register: R0 },
+				Instruction::Neg { register: R0 },
+				Instruction::Swap { register: R0 },
+				Instruction::Lsr { register: R0 },
+				Instruction::Ror { register: R0 },
+				Instruction::Asr { register: R0 },
+				Instruction::Mul {
+					reg_dest: R1,
+					reg_read: R0
 				},
 				Instruction::Ldi {
 					register: UpperRegister::R16,
@@ -699,11 +783,11 @@ mod tests {
 					reg_read: R17
 				},
 				// update offset, if relative offset to 'begin' changes in the source code
-				Instruction::Breq { offset: -17 },
+				Instruction::Breq { offset: -24 },
 				// update offset, if relative offset to 'begin' changes in the source code
-				Instruction::Brne { offset: -18 },
+				Instruction::Brne { offset: -25 },
 				// update offset, if relative offset to 'begin' changes in the source code
-				Instruction::Brlt { offset: -19 },
+				Instruction::Brlt { offset: -26 },
 				Instruction::Call { address: 0.into() },
 				Instruction::Ret {},
 				Instruction::Sub {
@@ -753,6 +837,14 @@ mod tests {
 				},
 				Instruction::Bclr {
 					flag_type: FlagType::Zero // 1
+				},
+				Instruction::Sbi {
+					register: R31,
+					bit: 0.try_into().unwrap()
+				},
+				Instruction::Cbi {
+					register: R31,
+					bit: 0.try_into().unwrap()
 				},
 				Instruction::Bst {
 					register: R16,

@@ -97,6 +97,14 @@ impl Flags {
 		self.set_zns(result);
 	}
 
+	pub fn set_zcvns(&mut self, value: u8, result: u8) {
+		self.zero = result == 0;
+		self.carry = (value & 1) != 0;
+		self.negative = (result >> 7) != 0;
+		self.overflow = self.negative ^ self.carry;
+		self.sign = self.negative ^ self.overflow;
+	}
+
 	pub fn set_zns16(&mut self, result: u16) {
 		self.zero = result == 0;
 		self.negative = ((result << 15) & 1) != 0;
@@ -127,6 +135,26 @@ impl Flags {
 				& 1) != 0;
 
 		self.set_zns(result);
+	}
+
+	pub fn set_lsr_zcvs(&mut self, value: u8, result: u8) {
+		self.negative = false;
+		self.zero = result == 0;
+		self.carry = (value & 1) != 0;
+		self.overflow = self.negative ^ self.carry;
+		self.sign = self.negative ^ self.overflow;
+	}
+
+	pub fn set_neg_zns(&mut self, value: u8, result: u8) {
+		self.half_carry = (((result >> 3) | (value >> 3)) & 1) != 0;
+		self.overflow = result == 0x80;
+		self.carry = result != 0;
+		self.set_zns(result);
+	}
+
+	pub fn set_mul_zc(&mut self, result: u16) {
+		self.zero = result == 0;
+		self.carry = ((result >> 15) & 1) != 0;
 	}
 
 	pub fn set_add_zns16(&mut self, dest_value: u16, result: u16) {
