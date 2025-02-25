@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 struct Line {
 	/// preprocessed line
-	str: String,
+	instruction: String,
 	/// original from source code
 	line_number: usize,
 	/// parsed label
@@ -11,20 +11,19 @@ struct Line {
 }
 
 impl Line {
-	/// preprocesses `str` and removes any comments (';')
+	/// preprocesses line: removes any comments (';'), seperate label and instruction
 	fn new(str: &str, line_number: usize) -> Self {
-		let str_without_comments = str.split(';').next().unwrap_or("").trim().to_string();
-		let label = if str_without_comments.ends_with(':') {
-			str_without_comments
-				.split(':')
-				.next()
-				.map(|s| s.trim().to_string())
-		} else {
-			None
+		let str_without_comments = match str.split_once(';') {
+			Some((line, _comment)) => line.trim().to_string(),
+			None => str.trim().to_string(),
+		};
+		let (label, instruction) = match str_without_comments.split_once(':') {
+			Some((label, instruction)) => (Some(label.to_string()), instruction.trim().to_string()),
+			None => (None, str_without_comments.to_string()),
 		};
 
 		Self {
-			str: str_without_comments,
+			instruction,
 			line_number,
 			label,
 		}
@@ -208,7 +207,7 @@ pub fn assemble(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 		.lines()
 		.enumerate()
 		.map(|(i, line_str)| Line::new(line_str, i + 1))
-		.filter(|l| !l.str.is_empty())
+		.filter(|l| !l.instruction.is_empty() || l.label.is_some())
 		.collect();
 
 	// maps symbols to program addresses
@@ -217,10 +216,9 @@ pub fn assemble(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 	for line in lines {
 		if let Some(label) = &line.label {
 			symbol_table.insert(label.clone(), intermediate_instructions.len() as u16);
-			continue;
 		}
 
-		let (mnemonic, operands) = split_mnemonic_operands(&line.str);
+		let (mnemonic, operands) = split_mnemonic_operands(&line.instruction);
 		if mnemonic.is_empty() {
 			continue;
 		}
