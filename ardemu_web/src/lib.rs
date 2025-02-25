@@ -1,5 +1,5 @@
 use ardemu_core::{
-	parse_asm, Cpu, CpuStatus,
+	assemble, Cpu, CpuStatus,
 	Register::{self, R26},
 	RegisterPair16,
 };
@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub fn evaluate(source_code: &str) -> String {
-	let (instructions_str, mut cpu) = match parse_asm(source_code) {
+	let (instructions_str, mut cpu) = match assemble(source_code) {
 		Ok(program) => (
 			program
 				.iter()

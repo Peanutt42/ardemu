@@ -4,7 +4,9 @@
 #![deny(unused_must_use)]
 #![deny(unsafe_code)]
 
-use ardemu_core::{parse_asm, AsmParseError, Cpu, CpuStatus, Instruction, Register};
+use ardemu_core::{
+	assemble, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Instruction, Register,
+};
 use iced::{
 	alignment::Vertical,
 	border::rounded,
@@ -65,7 +67,7 @@ struct App {
 impl Default for App {
 	fn default() -> Self {
 		let asm_source_code = include_str!("fib16.asm").to_string();
-		let asm_output = parse_asm(&asm_source_code);
+		let asm_output = assemble(&asm_source_code);
 		let cpu = match asm_output.as_ref() {
 			Ok(program) => Cpu::new(program.clone()),
 			Err(_) => Cpu::default(),
@@ -142,13 +144,13 @@ impl App {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
 				if is_edit {
-					self.asm_output = parse_asm(&self.asm_source_code_text_content.text());
+					self.asm_output = assemble(&self.asm_source_code_text_content.text());
 					self.update(Message::ResetCpu);
 				}
 			}
 			Message::AsmSourceCodeUnindent => {
 				unindent_text(&mut self.asm_source_code_text_content);
-				self.asm_output = parse_asm(&self.asm_source_code_text_content.text());
+				self.asm_output = assemble(&self.asm_source_code_text_content.text());
 				self.update(Message::ResetCpu);
 			}
 			Message::UpdateCpuState => {
@@ -251,7 +253,7 @@ impl App {
 									let instr_currently_executing = program_counter == address;
 
 									row![
-										button(text!("{address:#04x}:").font(Font::MONOSPACE))
+										button(text!("{}:", Imm16(address)).font(Font::MONOSPACE))
 											.style(move |t, s| {
 												if breakpoint_set_here {
 													if instr_currently_executing {
@@ -309,11 +311,9 @@ impl App {
 			text("Registers:"),
 			container(scrollable(
 				Column::with_children(Register::ALL.iter().map(|reg| {
-					let value = cpu.read_register(*reg);
+					let value = Imm8(cpu.read_register(*reg));
 
-					text(format!("{reg}: {value:#04x}"))
-						.font(Font::MONOSPACE)
-						.into()
+					text(format!("{reg}: {value}")).font(Font::MONOSPACE).into()
 				}))
 				.spacing(10)
 				.padding(10)
@@ -330,14 +330,11 @@ impl App {
 		column![
 			text("Flags:"),
 			container(scrollable(
-				column![
-					row![text!("Z: {}", cpu.flags().zero() as u8).font(Font::MONOSPACE)],
-					row![text!("N: {}", cpu.flags().negative() as u8).font(Font::MONOSPACE)],
-					row![text!("S: {}", cpu.flags().sign() as u8).font(Font::MONOSPACE)],
-					row![text!("V: {}", cpu.flags().overflow() as u8).font(Font::MONOSPACE)],
-					row![text!("H: {}", cpu.flags().half_carry() as u8).font(Font::MONOSPACE)],
-					row![text!("C: {}", cpu.flags().carry() as u8).font(Font::MONOSPACE)]
-				]
+				Column::with_children(FlagType::ALL.iter().map(|flag_type| {
+					text!("{flag_type}: {}", cpu.flags().get(*flag_type) as u8)
+						.font(Font::MONOSPACE)
+						.into()
+				}))
 				.spacing(10)
 				.padding(10)
 				.width(Fill)
@@ -365,7 +362,7 @@ impl App {
 							"0x0000",
 							self.memory_view_start_address_input
 								.as_ref()
-								.unwrap_or(&format!("{:#06x}", self.memory_view_start_address))
+								.unwrap_or(&format!("{}", Imm16(self.memory_view_start_address)))
 						)
 						.on_input(Message::ChangeMemoryViewStartAddressInput)
 						.on_submit(Message::ChangeMemoryViewStartAddressFromInput),
@@ -377,9 +374,11 @@ impl App {
 							match index {
 								-1 => text(""),
 								_ => {
-									let address = self.memory_view_start_address
-										+ index as u16 * Self::BYTES_PER_ROW;
-									text!("{address:#06x} ").font(Font::MONOSPACE)
+									let address = Imm16(
+										self.memory_view_start_address
+											+ index as u16 * Self::BYTES_PER_ROW,
+									);
+									text!("{address} ").font(Font::MONOSPACE)
 								}
 							}
 							.height(Self::ROW_HEIGHT)

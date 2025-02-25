@@ -1,12 +1,12 @@
 use std::num::ParseIntError;
 use thiserror::Error;
 
-use crate::Register;
+use crate::{Imm16, Register};
 
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
 pub enum CpuError {
-	#[error("Invalid RAM address {addr:#04x}")]
-	InvalidRamAddress { addr: u16 },
+	#[error("Invalid RAM address {addr}")]
+	InvalidRamAddress { addr: Imm16 },
 	#[error("Stack overflow")]
 	StackOverflow,
 	#[error("Stack underflow")]

@@ -1,6 +1,9 @@
 use std::{collections::HashSet, ops::RangeInclusive};
 
-use crate::{register::RegisterPair16, CpuError, Flags, Instruction, Register};
+use crate::{
+	get_bit_from_u8, register::RegisterPair16, set_bit_in_u8, CpuError, Flags, Instruction,
+	Register,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CpuStatus {
@@ -95,7 +98,9 @@ impl Cpu {
 		let ram = self
 			.sram
 			.get(address as usize)
-			.ok_or(CpuError::InvalidRamAddress { addr: address })?;
+			.ok_or(CpuError::InvalidRamAddress {
+				addr: address.into(),
+			})?;
 		Ok(*ram)
 	}
 
@@ -103,7 +108,7 @@ impl Cpu {
 		self.sram
 			.get(*address_range.start() as usize..=*address_range.end() as usize)
 			.ok_or(CpuError::InvalidRamAddress {
-				addr: *address_range.start(),
+				addr: (*address_range.start()).into(),
 			})
 	}
 
@@ -111,7 +116,9 @@ impl Cpu {
 		let mut_ram = self
 			.sram
 			.get_mut(address as usize)
-			.ok_or(CpuError::InvalidRamAddress { addr: address })?;
+			.ok_or(CpuError::InvalidRamAddress {
+				addr: address.into(),
+			})?;
 		*mut_ram = value;
 		Ok(())
 	}
@@ -139,10 +146,10 @@ impl Cpu {
 		}
 
 		match instruction {
-			Instruction::Nop {} => {
+			Instruction::Nop => {
 				self.program_counter += 1;
 			}
-			Instruction::Break {} => {
+			Instruction::Break => {
 				return Ok(CpuStatus::BreakHit);
 			}
 			Instruction::Jmp { address } => {
@@ -307,7 +314,7 @@ impl Cpu {
 				self.push(self.program_counter as u8 + 1)?;
 				self.program_counter = address.0;
 			}
-			Instruction::Ret {} => {
+			Instruction::Ret => {
 				self.program_counter = self.pop()? as u16;
 			}
 			Instruction::Sub { reg_dest, reg_read } => {
@@ -413,14 +420,20 @@ impl Cpu {
 				self.flags.clear(flag_type);
 				self.program_counter += 1;
 			}
-			Instruction::Sbi { register, bit } => {
-				let value = self.read_register(register);
-				self.write_register(register, set_bit_in_u8(value, bit.0, true));
+			Instruction::Sbi {
+				register_address,
+				bit,
+			} => {
+				let value = self.read_register(register_address.0);
+				self.write_register(register_address.0, set_bit_in_u8(value, bit.0, true));
 				self.program_counter += 1;
 			}
-			Instruction::Cbi { register, bit } => {
-				let value = self.read_register(register);
-				self.write_register(register, set_bit_in_u8(value, bit.0, false));
+			Instruction::Cbi {
+				register_address,
+				bit,
+			} => {
+				let value = self.read_register(register_address.0);
+				self.write_register(register_address.0, set_bit_in_u8(value, bit.0, false));
 				self.program_counter += 1;
 			}
 			Instruction::Bst { register, bit } => {
@@ -476,18 +489,6 @@ impl Default for Cpu {
 	}
 }
 
-pub(crate) fn get_bit_from_u8(value: u8, bit: u8) -> bool {
-	value & (1 << bit) != 0
-}
-
-pub(crate) fn set_bit_in_u8(value: u8, bit: u8, bit_value: bool) -> u8 {
-	if bit_value {
-		value | (1 << bit)
-	} else {
-		value & !(1 << bit)
-	}
-}
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 #[allow(clippy::panic)]
@@ -498,28 +499,6 @@ mod tests {
 	};
 
 	use super::*;
-
-	#[test]
-	fn test_bit_manipulation() {
-		let value: u8 = 0b10101010;
-		assert!(!get_bit_from_u8(value, 0));
-		assert!(get_bit_from_u8(value, 1));
-		assert!(!get_bit_from_u8(value, 2));
-		assert!(get_bit_from_u8(value, 3));
-		assert!(!get_bit_from_u8(value, 4));
-		assert!(get_bit_from_u8(value, 5));
-		assert!(!get_bit_from_u8(value, 6));
-		assert!(get_bit_from_u8(value, 7));
-
-		assert_eq!(set_bit_in_u8(value, 0, true), 0b10101011);
-		assert_eq!(set_bit_in_u8(value, 1, false), 0b10101000);
-		assert_eq!(set_bit_in_u8(value, 2, true), 0b10101110);
-		assert_eq!(set_bit_in_u8(value, 3, false), 0b10100010);
-		assert_eq!(set_bit_in_u8(value, 4, true), 0b10111010);
-		assert_eq!(set_bit_in_u8(value, 5, false), 0b10001010);
-		assert_eq!(set_bit_in_u8(value, 6, true), 0b11101010);
-		assert_eq!(set_bit_in_u8(value, 7, false), 0b00101010);
-	}
 
 	#[test]
 	fn test_execute_push_pop() {

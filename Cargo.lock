@@ -118,12 +118,21 @@ dependencies = [
 name = "ardemu"
 version = "0.1.0"
 dependencies = [
- "ardemu_asm_parse_macro",
+ "ardemu_assemble_macro",
  "ardemu_core",
 ]
 
 [[package]]
 name = "ardemu_asm_parse_macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "ardemu_assemble_macro"
 version = "0.1.0"
 dependencies = [
  "ardemu_core",
@@ -138,6 +147,7 @@ name = "ardemu_core"
 version = "0.1.0"
 dependencies = [
  "ardemu_asm_parse_macro",
+ "ardemu_assemble_macro",
  "ardemu_display_instr_macro",
  "num_enum",
  "self-rust-tokenize",

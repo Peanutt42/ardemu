@@ -3,6 +3,8 @@ use std::fmt::Display;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use self_rust_tokenize::SelfRustTokenize;
 
+use crate::{AsmOperand, AsmParseErrorType};
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Flags {
 	/// Z
@@ -45,6 +47,17 @@ impl Flags {
 			FlagType::BitCopy => self.bit_copy = true,
 		}
 	}
+	pub fn get(&self, flag_type: FlagType) -> bool {
+		match flag_type {
+			FlagType::Zero => self.zero,
+			FlagType::Negative => self.negative,
+			FlagType::Sign => self.sign,
+			FlagType::Overflow => self.overflow,
+			FlagType::Carry => self.carry,
+			FlagType::HalfCarry => self.half_carry,
+			FlagType::BitCopy => self.bit_copy,
+		}
+	}
 
 	pub fn zero(&self) -> bool {
 		self.zero
@@ -79,14 +92,6 @@ impl Flags {
 
 	fn set_zns(&mut self, result: u8) {
 		self.zero = result == 0;
-		self.negative = ((result << 7) & 1) != 0;
-		self.sign = self.negative ^ self.overflow;
-	}
-
-	fn set_rzns(&mut self, result: u8) {
-		if result != 0 {
-			self.zero = false;
-		}
 		self.negative = ((result << 7) & 1) != 0;
 		self.sign = self.negative ^ self.overflow;
 	}
@@ -179,7 +184,11 @@ impl Flags {
 			((((dest_value & !read_value & !result) | (!dest_value & read_value & result)) >> 7)
 				& 1) != 0;
 
-		self.set_rzns(result);
+		if result != 0 {
+			self.zero = false;
+		}
+		self.negative = ((result << 7) & 1) != 0;
+		self.sign = self.negative ^ self.overflow;
 	}
 }
 
@@ -209,6 +218,16 @@ pub enum FlagType {
 }
 
 impl FlagType {
+	pub const ALL: &[FlagType; 7] = &[
+		Self::Carry,
+		Self::Zero,
+		Self::Negative,
+		Self::Overflow,
+		Self::Sign,
+		Self::HalfCarry,
+		Self::BitCopy,
+	];
+
 	pub fn label(&self) -> char {
 		match self {
 			Self::Carry => 'C',
@@ -221,7 +240,15 @@ impl FlagType {
 		}
 	}
 }
-
+impl AsmOperand for FlagType {
+	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
+		let flag_num = operand
+			.parse::<u8>()
+			.map_err(|_| AsmParseErrorType::InvalidCpuFlag(operand.to_string()))?;
+		FlagType::try_from(flag_num)
+			.map_err(|_| AsmParseErrorType::InvalidCpuFlag(operand.to_string()))
+	}
+}
 impl Display for FlagType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}({})", self.label(), *self as u8)

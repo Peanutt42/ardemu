@@ -1,4 +1,4 @@
-use ardemu_asm_parse_macro::include_asm;
+use ardemu_assemble_macro::include_asm;
 use ardemu_core::{
 	Cpu, CpuStatus,
 	Register::{R16, R17, R18, R19, R20},

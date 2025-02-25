@@ -1,84 +1,85 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use self_rust_tokenize::SelfRustTokenize;
-use syn::{parse_macro_input, LitStr};
+use syn::{parse_macro_input, Data, DataEnum, DeriveInput, Fields};
 
-#[proc_macro]
-pub fn parse_asm(input: TokenStream) -> TokenStream {
-	let asm_input = parse_macro_input!(input as LitStr).value();
-	let expanded = match ardemu_core::parse_asm(&asm_input) {
-		Ok(instructions) => {
-			let instruction_tokens = instructions
-				.into_iter()
-				.map(|instr| instr.to_tokens())
-				.collect::<Vec<_>>();
-			quote! {
-				{
-					use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, RegisterPair16, Imm3, Imm8, Imm16};
+#[proc_macro_derive(ParseAsmInstruction, attributes(skip))]
+pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
+	let input = parse_macro_input!(input as DeriveInput);
 
-					[ #(#instruction_tokens),* ]
-				}
-			}
-		}
-		Err(e) => {
-			let compile_error_msg = format!("ASM parse error: {e:?}");
+	let enum_name = &input.ident;
 
-			quote! {
-				compile_error!(#compile_error_msg)
-			}
-		}
+	let variants = match &input.data {
+		Data::Enum(DataEnum { variants, .. }) => variants,
+		_ => panic!("DisplayInstruction can only be derived for enums"),
 	};
 
-	expanded.into()
-}
+	let arms = variants.iter().map(|variant| {
+		let should_skip = variant
+			.attrs
+			.iter()
+			.any(|attr| attr.path().is_ident("skip"));
+		if should_skip {
+			return quote! {};
+		}
 
-#[proc_macro]
-pub fn include_asm(input: TokenStream) -> TokenStream {
-	let asm_filepath = parse_macro_input!(input as LitStr).value();
+		let variant_ident = &variant.ident;
+		let variant_name_upper = variant_ident.to_string().to_uppercase();
 
-	let current_dir = std::env::current_dir().unwrap();
+		match &variant.fields {
+			Fields::Named(ref fields) if !fields.named.is_empty() => {
+				let fields = &fields.named;
+				let fields_len = fields.len();
 
-	let asm_filepath = current_dir.join(asm_filepath);
-	let asm_filepath_str = asm_filepath.to_str().unwrap();
-
-	let expanded = match std::fs::read_to_string(&asm_filepath) {
-		Ok(asm_file_contents) => {
-			match ardemu_core::parse_asm(&asm_file_contents) {
-				Ok(instructions) => {
-					let instruction_tokens = instructions
-						.into_iter()
-						.map(|instr| instr.to_tokens())
-						.collect::<Vec<_>>();
-
+				let parsed_fields = fields.iter().enumerate().map(|(index, field)| {
+					let field_ident = field.ident.as_ref().unwrap();
+					let field_type = &field.ty;
 					quote! {
-						{
-							use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, RegisterPair16, Imm3, Imm8, Imm16};
+						#field_ident: #field_type::parse_operand(operands[#index])?
+					}
+				});
 
-							/// this will make the compiler recompile when the file changes
-							const _RECOMPILE_IF_CHANGED_HANDLE: &str = include_str!(#asm_filepath_str);
+				quote! {
+					#variant_name_upper => {
+						let operands: &[&str; #fields_len] = operands.try_into()
+							.map_err(|_| crate::AsmParseErrorType::InvalidArgumentCount {
+								expected_count: #fields_len,
+								actual_count: operands.len(),
+							})?;
 
-							[ #(#instruction_tokens),* ]
+						Ok(#enum_name::#variant_ident { #(#parsed_fields),* })
+					}
+				}
+			}
+			Fields::Unit | Fields::Named(_) => {
+				quote! {
+					#variant_name_upper => {
+						match operands.len() {
+							0 => Ok(#enum_name::#variant_ident),
+							_ => Err(crate::AsmParseErrorType::InvalidArgumentCount {
+								expected_count: 0,
+								actual_count: operands.len(),
+							})
 						}
 					}
 				}
-				Err(e) => {
-					let compile_error_msg =
-						format!("ASM parse error in file '{asm_filepath_str}': {e:?}");
-
-					quote! {
-						compile_error!(#compile_error_msg)
-					}
-				}
 			}
+			_ => panic!("Unnamed variant fields are not supported"),
 		}
-		Err(e) => {
-			let compile_error_msg =
-				format!("Failed to read ASM file in '{asm_filepath_str}': {e:?}");
-			quote! {
-				compile_error!(#compile_error_msg)
+	});
+
+	let expanded = quote! {
+		impl crate::ParseAsmInstruction for #enum_name {
+			fn parse_asm_instruction(
+				mnemonic: &str,
+				operands: &[&str],
+			) -> Result<Self, crate::AsmParseErrorType> {
+				match mnemonic.to_uppercase().as_str() {
+					#(#arms)*,
+					_ => Err(crate::AsmParseErrorType::InvalidInstruction(mnemonic.to_string())),
+				}
 			}
 		}
 	};
 
-	expanded.into()
+	TokenStream::from(expanded)
 }

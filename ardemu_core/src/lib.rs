@@ -20,11 +20,14 @@ pub use register::{
 		self, R0, R1, R10, R11, R12, R13, R14, R15, R16, R17, R18, R19, R2, R20, R21, R22, R23,
 		R24, R25, R26, R27, R28, R29, R30, R31, R4, R5, R6, R7, R8, R9,
 	},
-	RegisterPair16, UpperRegister, WordRegister,
+	RegisterAddress, RegisterPair16, UpperRegister, WordRegister,
 };
+
+mod bits;
+use bits::{get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16};
 
 mod flags;
 pub use flags::{FlagType, Flags};
 
-mod asm_parser;
-pub use asm_parser::parse_asm;
+mod assembler;
+pub use assembler::{assemble, parse_number_operand, AsmOperand, ParseAsmInstruction};
