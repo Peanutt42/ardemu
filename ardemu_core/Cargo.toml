@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ardemu_display_instr_macro = { path = "../ardemu_display_instr_macro" }
-ardemu_asm_parse_macro = { path = "../ardemu_asm_parse_macro" }
+ardemu_display_instr_macro = { path = "../ardemu_macros/ardemu_display_instr_macro" }
+ardemu_asm_parse_macro = { path = "../ardemu_macros/ardemu_asm_parse_macro" }
 thiserror = { workspace = true }
 self-rust-tokenize = { workspace = true }
 num_enum = "0.7.3"
 
 [dev-dependencies]
-ardemu_assemble_macro = { path = "../ardemu_assemble_macro" }
+ardemu_assemble_macro = { path = "../ardemu_macros/ardemu_assemble_macro" }

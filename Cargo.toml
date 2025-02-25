@@ -4,7 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["ardemu_core", "ardemu_assemble_macro", "ardemu_gui", "ardemu_web"]
+members = [
+	"ardemu_core",
+	"ardemu_gui",
+	"ardemu_web",
+	"ardemu_macros/ardemu_assemble_macro",
+	"ardemu_macros/ardemu_asm_parse_macro",
+	"ardemu_macros/ardemu_display_instr_macro",
+]
 
 [workspace.dependencies]
 thiserror = { version = "2.0" }
@@ -15,4 +22,4 @@ proc-macro2 = "1.0"
 
 [dependencies]
 ardemu_core = { path = "ardemu_core" }
-ardemu_assemble_macro = { path = "ardemu_assemble_macro" }
+ardemu_assemble_macro = { path = "ardemu_macros/ardemu_assemble_macro" }
