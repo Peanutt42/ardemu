@@ -171,7 +171,7 @@ impl Cpu {
 				let value = self.read_register(register);
 				let result = 0x0 - value;
 				self.write_register(register, result);
-				self.flags.set_neg_zns(value, result);
+				self.flags.set_neg_znsvch(value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Swap { register } => {
@@ -184,7 +184,7 @@ impl Cpu {
 				let value = self.read_register(register);
 				let result = value >> 1;
 				self.write_register(register, result);
-				self.flags.set_lsr_zcvs(value, result);
+				self.flags.set_lsr_znsvc(value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Ror { register } => {
@@ -192,14 +192,14 @@ impl Cpu {
 				let carry_bit = if self.flags.carry() { 0x80 } else { 0x00 };
 				let result = carry_bit | (value >> 1);
 				self.write_register(register, result);
-				self.flags.set_zcvns(value, result);
+				self.flags.set_znsvc(value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Asr { register } => {
 				let value = self.read_register(register);
 				let result = (value >> 1) | (value & 0x80);
 				self.write_register(register, result);
-				self.flags.set_zcvns(value, result);
+				self.flags.set_znsvc(value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Mul { reg_dest, reg_read } => {
@@ -253,14 +253,14 @@ impl Cpu {
 			Instruction::Cpi { register, value } => {
 				let register_value = self.read_register(register);
 				let result = register_value.wrapping_sub(value.0);
-				self.flags.set_sub_zns(register_value, value.0, result);
+				self.flags.set_sub_znsvch(register_value, value.0, result);
 				self.program_counter += 1;
 			}
 			Instruction::Cp { reg_dest, reg_read } => {
 				let dest_value = self.read_register(reg_dest);
 				let read_value = self.read_register(reg_read);
 				let result = dest_value.wrapping_sub(read_value);
-				self.flags.set_sub_zns(dest_value, read_value, result);
+				self.flags.set_sub_znsvch(dest_value, read_value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Cpc { reg_dest, reg_read } => {
@@ -269,7 +269,7 @@ impl Cpu {
 				let result = dest_value
 					.wrapping_sub(read_value)
 					.wrapping_sub(self.flags.carry_u8());
-				self.flags.set_sub_zns(dest_value, read_value, result);
+				self.flags.set_sub_znsvch(dest_value, read_value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Cpse { reg_dest, reg_read } => {
@@ -322,7 +322,7 @@ impl Cpu {
 				let read_value = self.read_register(reg_read);
 				let result = dest_value.wrapping_sub(read_value);
 				self.write_register(reg_dest, result);
-				self.flags.set_sub_zns(dest_value, read_value, result);
+				self.flags.set_sub_znsvch(dest_value, read_value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Sbc { reg_dest, reg_read } => {
@@ -332,14 +332,14 @@ impl Cpu {
 					.wrapping_sub(read_value)
 					.wrapping_sub(self.flags.carry_u8());
 				self.write_register(reg_dest, result);
-				self.flags.set_sub_zns(dest_value, read_value, result);
+				self.flags.set_sub_znsvch(dest_value, read_value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Subi { register, value } => {
 				let register_value = self.read_register(register);
 				let result = register_value.wrapping_sub(value.0);
 				self.write_register(register, result);
-				self.flags.set_sub_zns(register_value, value.0, result);
+				self.flags.set_sub_znsvch(register_value, value.0, result);
 				self.program_counter += 1;
 			}
 			Instruction::Sbci { register, value } => {
@@ -348,7 +348,7 @@ impl Cpu {
 					.wrapping_sub(value.0)
 					.wrapping_sub(self.flags.carry_u8());
 				self.write_register(register, result);
-				self.flags.set_sub_rzns(register_value, value.0, result);
+				self.flags.set_sub_rznsvch(register_value, value.0, result);
 				self.program_counter += 1;
 			}
 			Instruction::Sbiw { register, value } => {
@@ -362,7 +362,7 @@ impl Cpu {
 				let register_value = self.read_register(register);
 				let result = register_value.wrapping_sub(1);
 				self.write_register(register, result);
-				self.flags.set_sub_zns(register_value, 1, result);
+				self.flags.set_sub_znsvch(register_value, 1, result);
 				self.program_counter += 1;
 			}
 			Instruction::Add { reg_dest, reg_read } => {
@@ -370,7 +370,7 @@ impl Cpu {
 				let read_value = self.read_register(reg_read);
 				let result = dest_value.wrapping_add(read_value);
 				self.write_register(reg_dest, result);
-				self.flags.set_add_zns(dest_value, read_value, result);
+				self.flags.set_add_znsvch(dest_value, read_value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Adc { reg_dest, reg_read } => {
@@ -380,7 +380,7 @@ impl Cpu {
 					.wrapping_add(read_value)
 					.wrapping_add(self.flags.carry_u8());
 				self.write_register(reg_dest, result);
-				self.flags.set_add_zns(dest_value, read_value, result);
+				self.flags.set_add_znsvch(dest_value, read_value, result);
 				self.program_counter += 1;
 			}
 			Instruction::Adiw { register, value } => {
@@ -394,7 +394,7 @@ impl Cpu {
 				let register_value = self.read_register(register);
 				let result = register_value.wrapping_add(1);
 				self.write_register(register, result);
-				self.flags.set_add_zns(register_value, 1, result);
+				self.flags.set_add_znsvch(register_value, 1, result);
 				self.program_counter += 1;
 			}
 			Instruction::And { reg_dest, reg_read } => {
