@@ -5,7 +5,8 @@
 #![deny(unsafe_code)]
 
 use ardemu_core::{
-	assemble, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Instruction, Register,
+	assemble, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Instruction,
+	Register::{self, R9},
 };
 use iced::{
 	alignment::Vertical,
@@ -234,7 +235,7 @@ impl App {
 		.into()
 	}
 
-	fn instructions_pane(&self, cpu: &Cpu, portrait: bool) -> Element<Message> {
+	fn instructions_pane(&self, cpu: &Cpu) -> Element<Message> {
 		let program_counter = cpu.get_program_counter();
 
 		column![
@@ -297,11 +298,7 @@ impl App {
 			})
 			.style(panel_style),
 		]
-		.width(if portrait {
-			FillPortion(3)
-		} else {
-			FillPortion(2)
-		})
+		.width(FillPortion(2))
 		.spacing(5)
 		.into()
 	}
@@ -312,16 +309,17 @@ impl App {
 			container(scrollable(
 				Column::with_children(Register::ALL.iter().map(|reg| {
 					let value = Imm8(cpu.read_register(*reg));
+					let padding_space = if *reg <= R9 { " " } else { "" };
 
-					text(format!("{reg}: {value}")).font(Font::MONOSPACE).into()
+					text(format!("{reg}: {padding_space}{value}"))
+						.font(Font::MONOSPACE)
+						.into()
 				}))
 				.spacing(10)
-				.padding(10)
-				.width(Fill)
+				.padding(Padding::new(10.0).right(20))
 			))
 			.style(panel_style)
 		]
-		.width(Fill)
 		.spacing(5)
 		.into()
 	}
@@ -336,12 +334,11 @@ impl App {
 						.into()
 				}))
 				.spacing(10)
-				.padding(10)
-				.width(Fill)
+				.padding(10) //.width(Fill)
 			))
 			.style(panel_style)
 		]
-		.width(Fill)
+		//.width(Fill)
 		.spacing(5)
 		.into()
 	}
@@ -475,7 +472,7 @@ impl App {
 		let cpu_sim = self.cpu_sim.peek_output_buffer();
 		let cpu = &cpu_sim.cpu;
 
-		let instruction_pane = self.instructions_pane(cpu, portrait);
+		let instruction_pane = self.instructions_pane(cpu);
 		let register_pane = self.registers_pane(cpu);
 		let flags_pane = self.flags_pane(cpu);
 		let memory_pane = self.memory_pane(cpu, portrait);
