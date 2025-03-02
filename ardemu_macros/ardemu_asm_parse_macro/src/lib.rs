@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DataEnum, DeriveInput, Fields};
 
-#[proc_macro_derive(ParseAsmInstruction, attributes(skip))]
+#[proc_macro_derive(ParseAsmInstruction, attributes(skip_parse_asm_instruction))]
 pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 
@@ -17,7 +17,7 @@ pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 		let should_skip = variant
 			.attrs
 			.iter()
-			.any(|attr| attr.path().is_ident("skip"));
+			.any(|attr| attr.path().is_ident("skip_parse_asm_instruction"));
 		if should_skip {
 			return quote! {};
 		}
