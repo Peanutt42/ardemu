@@ -5,7 +5,7 @@
 #![deny(unsafe_code)]
 
 mod error;
-pub use error::{AsmParseError, AsmParseErrorType, CpuError};
+pub use error::{AsmParseError, AsmParseErrorType, CpuError, LoadIHex};
 
 mod cpu;
 pub use cpu::{Cpu, CpuStatus};
@@ -15,6 +15,9 @@ pub use instruction::Instruction;
 
 mod opcode;
 pub use opcode::Opcode;
+
+mod ihex;
+pub use ihex::load_ihex_str;
 
 mod register;
 pub use register::{

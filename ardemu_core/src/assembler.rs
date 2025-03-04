@@ -109,31 +109,31 @@ impl IntermediateInstruction {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Jmp {
-				address: address.into(),
+				word_address: address.into(),
 			}),
 			Self::Call {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Call {
-				address: address.into(),
+				word_address: address.into(),
 			}),
 			Self::Breq {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Breq {
-				offset: (address as i32 - program_address as i32) as i8 - 1,
+				word_offset: (address as i32 - program_address as i32) as i8 - 1,
 			}),
 			Self::Brne {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brne {
-				offset: (address as i32 - program_address as i32) as i8 - 1,
+				word_offset: (address as i32 - program_address as i32) as i8 - 1,
 			}),
 			Self::Brlt {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brlt {
-				offset: (address as i32 - program_address as i32) as i8 - 1,
+				word_offset: (address as i32 - program_address as i32) as i8 - 1,
 			}),
 			Self::Instruction(instruction) => Ok(instruction),
 		}

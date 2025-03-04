@@ -19,6 +19,7 @@ pub enum CpuStatus {
 pub struct Cpu {
 	program: Box<[Instruction]>,
 	registers: [u8; Register::COUNT],
+	// in words (1 word = 2 bytes)
 	program_counter: u16,
 	stack_pointer: u16,
 	flags: Flags,
@@ -175,7 +176,9 @@ impl Cpu {
 			Instruction::Break => {
 				return Ok(CpuStatus::BreakHit);
 			}
-			Instruction::Jmp { address } => {
+			Instruction::Jmp {
+				word_address: address,
+			} => {
 				self.program_counter = address as u16;
 			}
 			Instruction::Eor { reg_dest, reg_read } => {
@@ -258,7 +261,9 @@ impl Cpu {
 				self.write_register_pair16(reg_dest, value);
 				self.program_counter += 1;
 			}
-			Instruction::RJmp { offset } => {
+			Instruction::RJmp {
+				word_offset: offset,
+			} => {
 				let new_program_counter = (self.program_counter as i32)
 					.wrapping_add(offset as i32)
 					.wrapping_add(1);
@@ -302,7 +307,9 @@ impl Cpu {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Breq { offset } => {
+			Instruction::Breq {
+				word_offset: offset,
+			} => {
 				if self.flags.zero() {
 					let new_program_counter = (self.program_counter as i32)
 						.wrapping_add(offset as i32)
@@ -312,7 +319,9 @@ impl Cpu {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Brne { offset } => {
+			Instruction::Brne {
+				word_offset: offset,
+			} => {
 				if !self.flags.zero() {
 					let new_program_counter = (self.program_counter as i32)
 						.wrapping_add(offset as i32)
@@ -322,7 +331,9 @@ impl Cpu {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Brlt { offset } => {
+			Instruction::Brlt {
+				word_offset: offset,
+			} => {
 				if self.flags.sign() {
 					let new_program_counter = (self.program_counter as i32)
 						.wrapping_add(offset as i32)
@@ -332,7 +343,9 @@ impl Cpu {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Call { address } => {
+			Instruction::Call {
+				word_address: address,
+			} => {
 				self.push16(self.program_counter + 1)?;
 				self.program_counter = address as u16;
 			}
@@ -486,6 +499,9 @@ impl Cpu {
 			Instruction::In { register, address } => {
 				self.write_register(register, self.read_ram(address.0 as u16)?);
 				self.program_counter += 1;
+			}
+			Instruction::Cli => {
+				todo!("Implement clearing of global interrupt flag")
 			}
 		}
 

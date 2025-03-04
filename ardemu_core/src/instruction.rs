@@ -24,7 +24,7 @@ pub enum Instruction {
 	Break,
 	/// jump to absolute address: PC = address
 	#[skip_parse_asm_instruction]
-	Jmp { address: u32 },
+	Jmp { word_address: u32 },
 	/// Logical or and stores it in reg_dest
 	/// reg_dest = reg_dest | reg_read
 	Or {
@@ -85,7 +85,7 @@ pub enum Instruction {
 	/// jump relative to current PC with a offset
 	/// technically a 12 bit offset value
 	/// PC = PC + offset + 1 (+1 because of the instruction itself)
-	RJmp { offset: i16 },
+	RJmp { word_offset: i16 },
 	/// pushes register onto stack:
 	/// SP--
 	/// write value of register into new stack pointer address
@@ -121,23 +121,23 @@ pub enum Instruction {
 	/// PC = PC + offset + 1 (+1 because of the instruction itself)
 	/// offset is technically a 7 bit offset value
 	#[skip_parse_asm_instruction]
-	Breq { offset: i8 },
+	Breq { word_offset: i8 },
 	/// branch if not equal (Z flag is 0)
 	/// PC = PC + offset + 1 (+1 because of the instruction itself)
 	/// offset is technically a 7 bit offset value
 	#[skip_parse_asm_instruction]
-	Brne { offset: i8 },
+	Brne { word_offset: i8 },
 	/// branch if signed less than (S flag is 1)
 	/// PC = PC + offset + 1 (+1 because of the instruction itself)
 	/// offset is technically a 7 bit offset value
 	#[skip_parse_asm_instruction]
-	Brlt { offset: i8 },
+	Brlt { word_offset: i8 },
 	/// call subroutine at address:
 	/// ; PC + 2: return address: this instruction itself + next instruction as return address
 	/// push (PC + 1) onto stack
 	/// PC = address
 	#[skip_parse_asm_instruction]
-	Call { address: u32 },
+	Call { word_address: u32 },
 	/// return from subroutine:
 	/// pop return address from stack into PC:
 	/// ; basically
@@ -233,4 +233,6 @@ pub enum Instruction {
 	In { register: Register, address: Imm8 },
 	/// store value of register into sram address
 	Out { address: Imm8, register: Register },
+	/// Clears global interrupt flag
+	Cli,
 }

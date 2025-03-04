@@ -154,6 +154,10 @@ impl Opcode for Instruction {
 					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
 					Some(Instruction::Cpc { reg_dest, reg_read })
 				}
+				0b11 => {
+					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
+					Some(Instruction::Add { reg_dest, reg_read })
+				}
 				_ => None,
 			},
 			//				first 2 bits after front_4_bits
@@ -220,6 +224,7 @@ impl Opcode for Instruction {
 					0b100 => match (opcode_16bit & 0x00f0) >> 4 {
 						0b0000 => Some(Instruction::Ret),
 						0b1001 => Some(Instruction::Break),
+						0b1111 => Some(Instruction::Cli),
 						_ => None,
 					},
 					0b011 => match opcode_16bit & 0x0001 {
@@ -231,17 +236,26 @@ impl Opcode for Instruction {
 						}),
 						_ => None,
 					},
-					0b001 => Some(Instruction::Swap {
-						register: load_rr(opcode_16bit)?,
-					}),
+					0b001 => match opcode_16bit & 0x0001 {
+						0b0 => Some(Instruction::Swap {
+							register: load_rr(opcode_16bit)?,
+						}),
+						0b1 => Some(Instruction::Inc {
+							register: load_rr(opcode_16bit)?,
+						}),
+						_ => None,
+					},
 					0b110 => Some(Instruction::Jmp {
-						address: load_k24(opcode_32bit),
+						word_address: load_k24(opcode_32bit),
 					}),
 					0b010 => Some(Instruction::Asr {
 						register: load_rr(opcode_16bit)?,
 					}),
 					0b111 => Some(Instruction::Call {
-						address: load_k24(opcode_32bit),
+						word_address: load_k24(opcode_32bit),
+					}),
+					0b101 => Some(Instruction::Dec {
+						register: load_rr(opcode_16bit)?,
 					}),
 					_ => None,
 				},
@@ -279,7 +293,7 @@ impl Opcode for Instruction {
 				_ => None,
 			},
 			0b1100 => Some(Instruction::RJmp {
-				offset: load_k12(opcode_16bit),
+				word_offset: load_k12(opcode_16bit),
 			}),
 			0b0101 => {
 				let (register, value) = load_rd4_k8(opcode_16bit)?;
@@ -295,17 +309,23 @@ impl Opcode for Instruction {
 				0b00 => match opcode_16bit & 0x0007 {
 					0b001 => {
 						let offset = load_k7(opcode_16bit);
-						Some(Instruction::Breq { offset })
+						Some(Instruction::Breq {
+							word_offset: offset,
+						})
 					}
 					0b100 => {
 						let offset = load_k7(opcode_16bit);
-						Some(Instruction::Brlt { offset })
+						Some(Instruction::Brlt {
+							word_offset: offset,
+						})
 					}
 					_ => None,
 				},
 				0b01 => {
 					let offset = load_k7(opcode_16bit);
-					Some(Instruction::Brne { offset })
+					Some(Instruction::Brne {
+						word_offset: offset,
+					})
 				}
 				_ => None,
 			},

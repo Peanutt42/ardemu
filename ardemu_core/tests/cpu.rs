@@ -44,7 +44,7 @@ fn test_stackunderflow() {
 #[test]
 fn test_execute_jmp() {
 	let mut cpu = Cpu::default();
-	cpu.execute(Instruction::Jmp { address: 42 }).unwrap();
+	cpu.execute(Instruction::Jmp { word_address: 42 }).unwrap();
 	assert_eq!(cpu.get_program_counter(), 42);
 }
 

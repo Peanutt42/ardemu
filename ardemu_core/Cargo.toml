@@ -9,6 +9,7 @@ ardemu_asm_parse_macro = { path = "../ardemu_macros/ardemu_asm_parse_macro" }
 thiserror = { workspace = true }
 self-rust-tokenize = { workspace = true }
 num_enum = "0.7.3"
+ihex = "3.0.0"
 
 [dev-dependencies]
 ardemu_assemble_macro = { path = "../ardemu_macros/ardemu_assemble_macro" }

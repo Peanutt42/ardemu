@@ -53,7 +53,7 @@ fn test_load_instructions_from_opcodes() {
 	test_16bit(0b1001_0101_0000_1000, Instruction::Ret);
 	test_16bit(
 		0b1100_0000_0000_0000 | (u16::from_le_bytes((-2047_i16).to_le_bytes()) & 0x0fff),
-		Instruction::RJmp { offset: -2047 },
+		Instruction::RJmp { word_offset: -2047 },
 	);
 	test_16bit(0b1001_0101_1111_0111, Instruction::Ror { register: R31 });
 	test_16bit(
@@ -109,7 +109,9 @@ fn test_load_instructions_from_opcodes() {
 	test_16bit(0b1001_0101_1001_1000, Instruction::Break);
 	test_32bit(
 		0b1001_0100_0000_1100_1111_1111_1111_1111,
-		Instruction::Jmp { address: 0xFFFF },
+		Instruction::Jmp {
+			word_address: 0xFFFF,
+		},
 	);
 	test_16bit(
 		0b0010_0111_1111_0000,
@@ -178,11 +180,32 @@ fn test_load_instructions_from_opcodes() {
 			reg_read: R31,
 		},
 	);
-	test_16bit(0b1111_0010_0000_1001, Instruction::Breq { offset: -63 });
-	test_16bit(0b1111_0110_0000_1001, Instruction::Brne { offset: -63 });
-	test_16bit(0b1111_0110_0000_1100, Instruction::Brne { offset: -63 });
+	test_16bit(
+		0b1111_0010_0000_1001,
+		Instruction::Breq { word_offset: -63 },
+	);
+	test_16bit(
+		0b1111_0110_0000_1001,
+		Instruction::Brne { word_offset: -63 },
+	);
+	test_16bit(
+		0b1111_0110_0000_1100,
+		Instruction::Brne { word_offset: -63 },
+	);
 	test_32bit(
 		0b1001_0100_0000_1110_0011_1111_1111_1111,
-		Instruction::Call { address: 0x3FFF },
+		Instruction::Call {
+			word_address: 0x3FFF,
+		},
 	);
+	test_16bit(
+		0b0000_1111_1111_1111,
+		Instruction::Add {
+			reg_dest: R31,
+			reg_read: R31,
+		},
+	);
+	test_16bit(0b1001_0101_1111_1010, Instruction::Dec { register: R31 });
+	test_16bit(0b1001_0100_1111_1000, Instruction::Cli);
+	test_16bit(0b1001_0101_1111_0011, Instruction::Inc { register: R31 });
 }

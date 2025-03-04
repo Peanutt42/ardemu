@@ -63,7 +63,7 @@ fn test_assemble_every_instruction() {
 		Ok(vec![
 			Instruction::Nop {},
 			Instruction::Break {},
-			Instruction::Jmp { address: 0 },
+			Instruction::Jmp { word_address: 0 },
 			Instruction::Or {
 				reg_dest: R1,
 				reg_read: R1
@@ -98,7 +98,7 @@ fn test_assemble_every_instruction() {
 				reg_dest: LowerEvenRegister::R30,
 				reg_read: LowerEvenRegister::R24
 			},
-			Instruction::RJmp { offset: -1 },
+			Instruction::RJmp { word_offset: -1 },
 			Instruction::Push { register: R0 },
 			Instruction::Pop { register: R0 },
 			Instruction::Cp {
@@ -118,12 +118,12 @@ fn test_assemble_every_instruction() {
 				reg_read: R17
 			},
 			// update offset, if relative offset to 'begin' changes in the source code
-			Instruction::Breq { offset: -24 },
+			Instruction::Breq { word_offset: -24 },
 			// update offset, if relative offset to 'begin' changes in the source code
-			Instruction::Brne { offset: -25 },
+			Instruction::Brne { word_offset: -25 },
 			// update offset, if relative offset to 'begin' changes in the source code
-			Instruction::Brlt { offset: -26 },
-			Instruction::Call { address: 0 },
+			Instruction::Brlt { word_offset: -26 },
+			Instruction::Call { word_address: 0 },
 			Instruction::Ret {},
 			Instruction::Sub {
 				reg_dest: R16,
