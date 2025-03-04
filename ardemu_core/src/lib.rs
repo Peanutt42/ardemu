@@ -27,7 +27,7 @@ pub use register::{
 };
 
 mod bits;
-use bits::{get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16};
+pub use bits::{get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16};
 
 mod flags;
 pub use flags::{FlagType, Flags};
