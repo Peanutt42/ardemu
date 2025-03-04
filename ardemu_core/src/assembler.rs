@@ -246,9 +246,10 @@ pub fn assemble(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 mod tests {
 	use crate::Register::R31;
 	use crate::{
-		assemble, AsmParseError, AsmParseErrorType, FlagType, UpperRegister, WordRegister,
+		assemble, AsmParseError, AsmParseErrorType, FlagType, LowerEvenRegister, UpperRegister,
+		WordRegister,
 	};
-	use crate::{Instruction, RegisterPair16, R0, R1, R16, R17, R24, R30};
+	use crate::{Instruction, R0, R1, R16, R17};
 
 	#[test]
 	fn test_assemble_every_instruction() {
@@ -259,7 +260,7 @@ mod tests {
 				break
 				jmp begin
 				or r1, r1
-				ori r1, 0
+				ori r16, 0
 				eor r1, r1
 				com r0
 				neg r0
@@ -310,13 +311,13 @@ mod tests {
 			Ok(vec![
 				Instruction::Nop {},
 				Instruction::Break {},
-				Instruction::Jmp { address: 0.into() },
+				Instruction::Jmp { address: 0 },
 				Instruction::Or {
 					reg_dest: R1,
 					reg_read: R1
 				},
 				Instruction::Ori {
-					register: R1,
+					register: UpperRegister::R16,
 					value: 0.into()
 				},
 				Instruction::Eor {
@@ -342,8 +343,8 @@ mod tests {
 					reg_read: R1
 				},
 				Instruction::Movw {
-					reg_dest: RegisterPair16::new(R30).unwrap(),
-					reg_read: RegisterPair16::new(R24).unwrap()
+					reg_dest: LowerEvenRegister::R30,
+					reg_read: LowerEvenRegister::R24
 				},
 				Instruction::RJmp { offset: -1 },
 				Instruction::Push { register: R0 },
@@ -370,7 +371,7 @@ mod tests {
 				Instruction::Brne { offset: -25 },
 				// update offset, if relative offset to 'begin' changes in the source code
 				Instruction::Brlt { offset: -26 },
-				Instruction::Call { address: 0.into() },
+				Instruction::Call { address: 0 },
 				Instruction::Ret {},
 				Instruction::Sub {
 					reg_dest: R16,

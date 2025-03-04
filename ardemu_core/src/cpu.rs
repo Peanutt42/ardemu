@@ -1,8 +1,8 @@
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use crate::{
-	get_bit_from_u8, register::RegisterPair16, set_bit_in_u8, CpuError, Flags, Instruction,
-	Register,
+	get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16, CpuError, Flags, Instruction,
+	LowerEvenRegister, Register,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -86,12 +86,24 @@ impl Cpu {
 		reg.into().write_in(&mut self.registers, value);
 	}
 
-	pub fn read_register_pair16(&self, reg_pair: RegisterPair16) -> u16 {
-		reg_pair.read_from(&self.registers)
+	/// reads from register pair: low_register+1:low_register
+	pub fn read_register_pair16(&self, low_register: impl Into<LowerEvenRegister>) -> u16 {
+		let low_register = low_register.into();
+		let low = self.read_register(low_register);
+		let high = self.read_register(low_register.get_higher_uneven_register());
+		u8s_to_u16(low, high)
 	}
 
-	pub fn write_register_pair16(&mut self, reg_pair: RegisterPair16, value: u16) {
-		reg_pair.write_in(&mut self.registers, value);
+	/// write to register pair: low_register+1:low_register
+	pub fn write_register_pair16(
+		&mut self,
+		low_register: impl Into<LowerEvenRegister>,
+		value: u16,
+	) {
+		let low_register = low_register.into();
+		let [low_value, high_value] = u8s_from_u16(value);
+		self.write_register(low_register.get_higher_uneven_register(), high_value);
+		self.write_register(low_register, low_value);
 	}
 
 	pub fn read_ram(&self, address: u16) -> Result<u8, CpuError> {
@@ -153,7 +165,7 @@ impl Cpu {
 				return Ok(CpuStatus::BreakHit);
 			}
 			Instruction::Jmp { address } => {
-				self.program_counter = address.0;
+				self.program_counter = address as u16;
 			}
 			Instruction::Eor { reg_dest, reg_read } => {
 				let result = self.read_register(reg_dest) ^ self.read_register(reg_read);
@@ -206,7 +218,7 @@ impl Cpu {
 				let dest_value = self.read_register(reg_dest);
 				let read_value = self.read_register(reg_read);
 				let result: u16 = dest_value as u16 * read_value as u16;
-				self.write_register_pair16(RegisterPair16::R1R0, result);
+				self.write_register_pair16(LowerEvenRegister::R0, result);
 				self.flags.set_mul_zc(result);
 				self.program_counter += 1;
 			}
@@ -312,7 +324,7 @@ impl Cpu {
 			Instruction::Call { address } => {
 				// TODO: handle 16-bit PC, for now not needed
 				self.push(self.program_counter as u8 + 1)?;
-				self.program_counter = address.0;
+				self.program_counter = address as u16;
 			}
 			Instruction::Ret => {
 				self.program_counter = self.pop()? as u16;
@@ -352,9 +364,9 @@ impl Cpu {
 				self.program_counter += 1;
 			}
 			Instruction::Sbiw { register, value } => {
-				let register_value = self.read_register_pair16(register.to_pair());
-				let result = register_value.wrapping_sub(value.0);
-				self.write_register_pair16(register.to_pair(), result);
+				let register_value = self.read_register_pair16(register);
+				let result = register_value.wrapping_sub(value.0 as u16);
+				self.write_register_pair16(register, result);
 				self.flags.set_zns16(result);
 				self.program_counter += 1;
 			}
@@ -384,9 +396,9 @@ impl Cpu {
 				self.program_counter += 1;
 			}
 			Instruction::Adiw { register, value } => {
-				let register_value = self.read_register_pair16(register.to_pair());
+				let register_value = self.read_register_pair16(register);
 				let result = register_value.wrapping_add(value.0);
-				self.write_register_pair16(register.to_pair(), result);
+				self.write_register_pair16(register, result);
 				self.flags.set_zns16(result);
 				self.program_counter += 1;
 			}
@@ -540,8 +552,7 @@ mod tests {
 	#[test]
 	fn test_execute_jmp() {
 		let mut cpu = Cpu::default();
-		cpu.execute(Instruction::Jmp { address: 42.into() })
-			.unwrap();
+		cpu.execute(Instruction::Jmp { address: 42 }).unwrap();
 		assert_eq!(cpu.program_counter, 42);
 	}
 
@@ -549,12 +560,10 @@ mod tests {
 	fn test_register_pair() {
 		let n: u16 = 0xFEFF;
 		let mut cpu = Cpu::default();
-		// R16:R17, little endian
-		let register_pair = RegisterPair16::new(R16).unwrap();
-		cpu.write_register_pair16(register_pair, n);
+		cpu.write_register_pair16(LowerEvenRegister::R16, n);
 		assert_eq!(cpu.read_register(R16), 0xFF);
 		assert_eq!(cpu.read_register(R17), 0xFE);
-		assert_eq!(cpu.read_register_pair16(register_pair), n);
+		assert_eq!(cpu.read_register_pair16(LowerEvenRegister::R16), n);
 	}
 
 	#[test]
@@ -643,9 +652,9 @@ mod tests {
 			let mut cpu = Cpu::default();
 
 			for value in u16::MIN..u16::MAX {
-				cpu.write_register_pair16(input_register.to_pair(), value);
+				cpu.write_register_pair16(input_register, value);
 				assert_eq!(cpu.execute(instruction).unwrap(), CpuStatus::Normal);
-				let output = cpu.read_register_pair16(output_register.to_pair());
+				let output = cpu.read_register_pair16(output_register);
 				let expected_output = expected(value);
 				assert_eq!(
 					output,
@@ -657,11 +666,11 @@ mod tests {
 
 		test_single(
 			Instruction::Ori {
-				register: R0,
+				register: UpperRegister::R16,
 				value: 42.into(),
 			},
-			R0,
-			R0,
+			R16,
+			R16,
 			|value| value | 42,
 		);
 		test_single(Instruction::Com { register: R0 }, R0, R0, |value| {

@@ -1,4 +1,4 @@
-use crate::{parse_number_operand, u8s_from_u16, u8s_to_u16, AsmOperand, AsmParseErrorType};
+use crate::{parse_number_operand, AsmOperand, AsmParseErrorType};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use self_rust_tokenize::SelfRustTokenize;
 
@@ -223,7 +223,7 @@ macro_rules! map_register {
 )]
 #[repr(u8)]
 pub enum UpperRegister {
-	R16,
+	R16 = 16,
 	R17,
 	R18,
 	R19,
@@ -287,60 +287,6 @@ impl AsmOperand for UpperRegister {
 	}
 }
 
-/// ensures that the register is any of:
-/// R24, R26, R28, R30
-#[derive(
-	Debug,
-	Clone,
-	Copy,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Hash,
-	Ord,
-	IntoPrimitive,
-	TryFromPrimitive,
-	SelfRustTokenize,
-)]
-#[repr(u8)]
-pub enum WordRegister {
-	R24,
-	R26,
-	R28,
-	R30,
-}
-impl WordRegister {
-	pub fn to_pair(self) -> RegisterPair16 {
-		match self {
-			Self::R24 => RegisterPair16 {
-				high: Register::R25,
-				low: Register::R24,
-			},
-			Self::R26 => RegisterPair16 {
-				high: Register::R27,
-				low: Register::R26,
-			},
-			Self::R28 => RegisterPair16 {
-				high: Register::R29,
-				low: Register::R28,
-			},
-			Self::R30 => RegisterPair16 {
-				high: Register::R31,
-				low: Register::R30,
-			},
-		}
-	}
-}
-display_register!(WordRegister, R24, R26, R28, R30);
-map_register!(WordRegister, Register, R24, R26, R28, R30);
-impl AsmOperand for WordRegister {
-	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
-		let register = Register::parse_operand(operand)?;
-		WordRegister::try_from(register)
-			.map_err(|_| AsmParseErrorType::InvalidRegister(operand.to_string()))
-	}
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub struct RegisterAddress(pub Register);
 
@@ -372,46 +318,157 @@ impl std::fmt::Display for RegisterAddress {
 	}
 }
 
-/// combines value of two 8 bit registers into a 16 bit value
-/// high_register must always be low_register + 1, as the values must be stored continuously
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
-pub struct RegisterPair16 {
-	pub high: Register,
-	pub low: Register,
-}
-impl RegisterPair16 {
-	pub const R1R0: Self = Self {
-		high: Register::R1,
-		low: Register::R0,
+macro_rules! display_register_pair {
+	($type:ident, $($variant:ident),*) => {
+		impl std::fmt::Display for $type {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				match *self {
+					$($type::$variant => write!(f, "{}:{}", $type::$variant.get_higher_uneven_register(), stringify!($variant).to_lowercase()),)*
+				}
+			}
+		}
 	};
+}
 
-	/// only fails if register is the low register is the last register,
-	/// as there is no register after it to store the high value
-	pub fn new(low: Register) -> Option<Self> {
-		let high = Register::try_from(low as u8 + 1).ok()?;
-		Some(Self { high, low })
-	}
-
-	/// this will not panic, enforced by the type
-	pub fn read_from(&self, registers: &[u8; Register::COUNT]) -> u16 {
-		u8s_to_u16(registers[self.low as usize], registers[self.high as usize])
-	}
-
-	/// this will not panic, enforced by the type
-	pub fn write_in(&self, registers: &mut [u8; Register::COUNT], value: u16) {
-		let [low_value, high_value] = u8s_from_u16(value);
-		registers[self.high as usize] = high_value;
-		registers[self.low as usize] = low_value;
+/// ensures that the register is any of:
+/// R24, R26, R28, R30
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Hash,
+	Ord,
+	IntoPrimitive,
+	TryFromPrimitive,
+	SelfRustTokenize,
+)]
+#[repr(u8)]
+pub enum WordRegister {
+	R24,
+	R26,
+	R28,
+	R30,
+}
+impl WordRegister {
+	pub fn get_higher_uneven_register(self) -> Register {
+		let lower_even_register: LowerEvenRegister = self.into();
+		lower_even_register.get_higher_uneven_register()
 	}
 }
-impl AsmOperand for RegisterPair16 {
+display_register_pair!(WordRegister, R24, R26, R28, R30);
+map_register!(WordRegister, Register, R24, R26, R28, R30);
+map_register!(WordRegister, LowerEvenRegister, R24, R26, R28, R30);
+impl AsmOperand for WordRegister {
 	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
-		let low_register = Register::parse_operand(operand)?;
-		RegisterPair16::new(low_register).ok_or(AsmParseErrorType::InvalidRegisterPairLowRegister)
+		let register = Register::parse_operand(operand)?;
+		WordRegister::try_from(register)
+			.map_err(|_| AsmParseErrorType::InvalidRegister(operand.to_string()))
 	}
 }
-impl std::fmt::Display for RegisterPair16 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{}", self.high, self.low)
+
+/// Even register (R0, R2, R4, .., R30)
+/// used for register pairs where even register is lower register, uneven is higher register
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Hash,
+	Ord,
+	IntoPrimitive,
+	TryFromPrimitive,
+	SelfRustTokenize,
+)]
+#[repr(u8)]
+pub enum LowerEvenRegister {
+	R0 = 0,
+	R2 = 2,
+	R4 = 4,
+	R6 = 6,
+	R8 = 8,
+	R10 = 10,
+	R12 = 12,
+	R14 = 14,
+	R16 = 16,
+	R18 = 18,
+	R20 = 20,
+	R22 = 22,
+	R24 = 24,
+	R26 = 26,
+	R28 = 28,
+	R30 = 30,
+}
+impl LowerEvenRegister {
+	/// returns the register+1
+	pub fn get_higher_uneven_register(&self) -> Register {
+		match self {
+			Self::R0 => Register::R1,
+			Self::R2 => Register::R3,
+			Self::R4 => Register::R5,
+			Self::R6 => Register::R7,
+			Self::R8 => Register::R9,
+			Self::R10 => Register::R11,
+			Self::R12 => Register::R13,
+			Self::R14 => Register::R15,
+			Self::R16 => Register::R17,
+			Self::R18 => Register::R19,
+			Self::R20 => Register::R21,
+			Self::R22 => Register::R23,
+			Self::R24 => Register::R25,
+			Self::R26 => Register::R27,
+			Self::R28 => Register::R29,
+			Self::R30 => Register::R31,
+		}
+	}
+}
+display_register_pair!(
+	LowerEvenRegister,
+	R0,
+	R2,
+	R4,
+	R6,
+	R8,
+	R10,
+	R12,
+	R14,
+	R16,
+	R18,
+	R20,
+	R22,
+	R24,
+	R26,
+	R28,
+	R30
+);
+map_register!(
+	LowerEvenRegister,
+	Register,
+	R0,
+	R2,
+	R4,
+	R6,
+	R8,
+	R10,
+	R12,
+	R14,
+	R16,
+	R18,
+	R20,
+	R22,
+	R24,
+	R26,
+	R28,
+	R30
+);
+impl AsmOperand for LowerEvenRegister {
+	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
+		let register = Register::parse_operand(operand)?;
+		LowerEvenRegister::try_from(register)
+			.map_err(|_| AsmParseErrorType::InvalidRegister(operand.to_string()))
 	}
 }

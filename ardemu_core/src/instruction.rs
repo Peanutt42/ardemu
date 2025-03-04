@@ -1,5 +1,5 @@
 use crate::{
-	AsmOperand, FlagType, Imm16, Imm3, Imm8, Register, RegisterAddress, RegisterPair16,
+	AsmOperand, FlagType, Imm16, Imm3, Imm8, LowerEvenRegister, Register, RegisterAddress,
 	UpperRegister, WordRegister,
 };
 use ardemu_asm_parse_macro::ParseAsmInstruction;
@@ -24,7 +24,7 @@ pub enum Instruction {
 	Break,
 	/// jump to absolute address: PC = address
 	#[skip_parse_asm_instruction]
-	Jmp { address: Imm16 },
+	Jmp { address: u32 },
 	/// Logical or and stores it in reg_dest
 	/// reg_dest = reg_dest | reg_read
 	Or {
@@ -33,7 +33,10 @@ pub enum Instruction {
 	},
 	/// Logical or of register and immediate, stores it in reg_dest
 	/// register = register | value
-	Ori { register: Register, value: Imm8 },
+	Ori {
+		register: UpperRegister,
+		value: Imm8,
+	},
 	/// Logical exclusive or and stores it in reg_dest
 	/// reg_dest = reg_dest ^ reg_read
 	Eor {
@@ -76,8 +79,8 @@ pub enum Instruction {
 	/// copies 16 bit value of rd+r:rd into rr+1:rr
 	/// reg_dest+1:reg_dest = reg_read+1:reg_read
 	Movw {
-		reg_dest: RegisterPair16,
-		reg_read: RegisterPair16,
+		reg_dest: LowerEvenRegister,
+		reg_read: LowerEvenRegister,
 	},
 	/// jump relative to current PC with a offset
 	/// technically a 12 bit offset value
@@ -134,7 +137,7 @@ pub enum Instruction {
 	/// push (PC + 1) onto stack
 	/// PC = address
 	#[skip_parse_asm_instruction]
-	Call { address: Imm16 },
+	Call { address: u32 },
 	/// return from subroutine:
 	/// pop return address from stack into PC:
 	/// ; basically
@@ -167,10 +170,7 @@ pub enum Instruction {
 	},
 	/// subtract immediate value from word register
 	/// register = register - value
-	Sbiw {
-		register: WordRegister,
-		value: Imm16,
-	},
+	Sbiw { register: WordRegister, value: Imm8 },
 	/// decrement register value
 	/// register = register - 1
 	Dec { register: Register },

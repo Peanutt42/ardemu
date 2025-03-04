@@ -1,8 +1,7 @@
 use ardemu_assemble_macro::include_asm;
 use ardemu_core::{
-	Cpu, CpuStatus,
-	Register::{R16, R20, R26},
-	RegisterPair16,
+	Cpu, CpuStatus, LowerEvenRegister,
+	Register::{R16, R20},
 };
 
 fn testing_fib(n: usize) -> usize {
@@ -34,7 +33,7 @@ fn fib16() {
 
 		while matches!(cpu.step().unwrap(), CpuStatus::Normal) {}
 
-		let result = cpu.read_register_pair16(RegisterPair16::new(R26).unwrap()) as usize;
+		let result = cpu.read_register_pair16(LowerEvenRegister::R26) as usize;
 
 		assert_eq!(result, testing_fib(n));
 	}

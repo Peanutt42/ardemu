@@ -13,14 +13,17 @@ pub use cpu::{Cpu, CpuStatus};
 mod instruction;
 pub use instruction::Instruction;
 
+mod opcode;
+pub use opcode::Opcode;
+
 mod register;
 pub use register::{
-	Imm16, Imm3, Imm8,
+	Imm16, Imm3, Imm8, LowerEvenRegister,
 	Register::{
 		self, R0, R1, R10, R11, R12, R13, R14, R15, R16, R17, R18, R19, R2, R20, R21, R22, R23,
 		R24, R25, R26, R27, R28, R29, R30, R31, R4, R5, R6, R7, R8, R9,
 	},
-	RegisterAddress, RegisterPair16, UpperRegister, WordRegister,
+	RegisterAddress, UpperRegister, WordRegister,
 };
 
 mod bits;
