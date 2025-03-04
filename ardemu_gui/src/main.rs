@@ -59,7 +59,7 @@ struct App {
 	simulate_cpu: bool,
 	cpu_sim: triple_buffer::Output<CpuSim>,
 	cpu_sim_message_sender: std::sync::mpsc::Sender<CpuSimMessage>,
-	memory_view_start_address: u16,
+	memory_view_start_address: u32,
 	memory_view_start_address_input: Option<String>,
 	asm_source_code_text_content: text_editor::Content,
 	asm_output: Result<Vec<Instruction>, AsmParseError>,
@@ -107,7 +107,7 @@ enum Message {
 	RemoveBreakpoint(u16),
 	ChangeMemoryViewStartAddressInput(String),
 	ChangeMemoryViewStartAddressFromInput,
-	ChangeMemoryViewStartAddress(u16),
+	ChangeMemoryViewStartAddress(u32),
 }
 
 impl App {
@@ -176,9 +176,9 @@ impl App {
 						.take()
 						.and_then(|input| {
 							if let Some(input) = input.strip_prefix("0x") {
-								u16::from_str_radix(input, 16).ok()
+								u32::from_str_radix(input, 16).ok()
 							} else {
-								input.parse::<u16>().ok()
+								input.parse::<u32>().ok()
 							}
 						}) {
 					self.update(Message::ChangeMemoryViewStartAddress(new_address));
@@ -345,7 +345,7 @@ impl App {
 
 	const ROW_HEIGHT: f32 = 18.0;
 	const DATA_COLUMN_SPACING: f32 = 5.0;
-	const BYTES_PER_ROW: u16 = 16;
+	const BYTES_PER_ROW: u32 = 16;
 	fn memory_pane<'a>(&'a self, cpu: &'a Cpu, portrait: bool) -> Element<'a, Message> {
 		column![
 			text("Memory:"),
@@ -359,7 +359,10 @@ impl App {
 							"0x0000",
 							self.memory_view_start_address_input
 								.as_ref()
-								.unwrap_or(&format!("{}", Imm16(self.memory_view_start_address)))
+								.unwrap_or(&format!(
+									"{}",
+									Imm16(self.memory_view_start_address as u16)
+								))
 						)
 						.on_input(Message::ChangeMemoryViewStartAddressInput)
 						.on_submit(Message::ChangeMemoryViewStartAddressFromInput),
@@ -373,7 +376,8 @@ impl App {
 								_ => {
 									let address = Imm16(
 										self.memory_view_start_address
-											+ index as u16 * Self::BYTES_PER_ROW,
+											.saturating_add(index as u32 * Self::BYTES_PER_ROW)
+											as u16,
 									);
 									text!("{address} ").font(Font::MONOSPACE)
 								}
@@ -399,25 +403,29 @@ impl App {
 									..Default::default()
 								}),
 								Column::with_children((0..num_rows).map(|row_index| {
-									let start_address = self.memory_view_start_address
-										+ row_index as u16 * Self::BYTES_PER_ROW;
-									let end_address = start_address + Self::BYTES_PER_ROW - 1;
+									let start_address = self
+										.memory_view_start_address
+										.saturating_add(row_index as u32 * Self::BYTES_PER_ROW);
+									let end_address =
+										start_address.saturating_add(Self::BYTES_PER_ROW - 1);
 
-									let data_view: Element<Message> =
-										match cpu.read_ram_range(start_address..=end_address) {
-											Ok(data) => Row::with_children(
-												(0..Self::BYTES_PER_ROW).map(|byte_index| {
-													let byte_value = data[byte_index as usize];
-
-													text!("{byte_value:2x}")
-														.font(Font::MONOSPACE)
-														.into()
-												}),
-											)
-											.spacing(Self::DATA_COLUMN_SPACING)
-											.into(),
-											Err(e) => text!("{e}").font(Font::MONOSPACE).into(),
-										};
+									let data_view: Element<Message> = match cpu
+										.read_ram_range(start_address as u16..=end_address as u16)
+									{
+										Ok(data) => Row::with_children(
+											(0..Self::BYTES_PER_ROW).map(|byte_index| {
+												match data.get(byte_index as usize) {
+													Some(byte_value) => text!("{byte_value:2x}"),
+													None => text("--"),
+												}
+												.font(Font::MONOSPACE)
+												.into()
+											}),
+										)
+										.spacing(Self::DATA_COLUMN_SPACING)
+										.into(),
+										Err(e) => text!("{e}").font(Font::MONOSPACE).into(),
+									};
 
 									container(data_view)
 										.padding(Padding::default().left(2.5).right(2.5))
@@ -441,13 +449,13 @@ impl App {
 								Message::ChangeMemoryViewStartAddress(match delta {
 									ScrollDelta::Lines { y, .. } => {
 										self.memory_view_start_address.saturating_add_signed(
-											-y as i16 * Self::BYTES_PER_ROW as i16,
+											-y as i32 * Self::BYTES_PER_ROW as i32,
 										)
 									}
 									ScrollDelta::Pixels { y, .. } => {
 										self.memory_view_start_address.saturating_add_signed(
-											(-y / Self::ROW_HEIGHT) as i16
-												* Self::BYTES_PER_ROW as i16,
+											(-y / Self::ROW_HEIGHT) as i32
+												* Self::BYTES_PER_ROW as i32,
 										)
 									}
 								})
