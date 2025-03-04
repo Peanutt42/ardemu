@@ -12,6 +12,7 @@ fn main() {
 	cpu.write_register(R16, n);
 
 	loop {
+		let current_program_counter = cpu.get_program_counter();
 		let current_instruction = cpu.get_current_instruction();
 
 		match cpu.step() {
@@ -19,7 +20,7 @@ fn main() {
 				CpuStatus::Normal => {
 					println!(
 						"{}: {}\n\t-> r16={:#04x}, r17={:#04x}, r18={:#04x}, r19={:#04x}, r20={:#04x}",
-						cpu.get_program_counter(),
+						current_program_counter,
 						current_instruction.unwrap(),
 						cpu.read_register(R16),
 						cpu.read_register(R17),
