@@ -151,6 +151,17 @@ impl Cpu {
 		let value = self.sram[self.stack_pointer as usize];
 		Ok(value)
 	}
+	fn push16(&mut self, value: u16) -> Result<(), CpuError> {
+		let [low, high] = u8s_from_u16(value);
+		self.push(low)?;
+		self.push(high)?;
+		Ok(())
+	}
+	fn pop16(&mut self) -> Result<u16, CpuError> {
+		let high = self.pop()?;
+		let low = self.pop()?;
+		Ok(u8s_to_u16(low, high))
+	}
 
 	pub fn execute(&mut self, instruction: Instruction) -> Result<CpuStatus, CpuError> {
 		if self.breakpoints.contains(&self.program_counter) {
@@ -322,12 +333,11 @@ impl Cpu {
 				}
 			}
 			Instruction::Call { address } => {
-				// TODO: handle 16-bit PC, for now not needed
-				self.push(self.program_counter as u8 + 1)?;
+				self.push16(self.program_counter + 1)?;
 				self.program_counter = address as u16;
 			}
 			Instruction::Ret => {
-				self.program_counter = self.pop()? as u16;
+				self.program_counter = self.pop16()?;
 			}
 			Instruction::Sub { reg_dest, reg_read } => {
 				let dest_value = self.read_register(reg_dest);
