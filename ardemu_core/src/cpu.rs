@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::RangeInclusive};
 
 use crate::{
 	get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16, CpuError, Flags, Instruction,
-	LowerEvenRegister, Program, Register, WordAddress,
+	LowerEvenRegister, Opcode, Program, Register, WordAddress,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -334,7 +334,7 @@ impl Cpu {
 				}
 			}
 			Instruction::Call { word_address } => {
-				self.push_address(self.program_counter + 1)?;
+				self.push_address(self.program_counter + instruction.get_word_size() as u16)?;
 				self.program_counter = word_address;
 			}
 			Instruction::Ret => {
@@ -474,11 +474,11 @@ impl Cpu {
 			}
 			Instruction::Sts { address, register } => {
 				self.write_ram(address.0, self.read_register(register))?;
-				self.program_counter += 1;
+				self.program_counter += instruction.get_word_size();
 			}
 			Instruction::Lds { register, address } => {
 				self.write_register(register, self.read_ram(address.0)?);
-				self.program_counter += 1;
+				self.program_counter += instruction.get_word_size();
 			}
 			Instruction::Out { address, register } => {
 				self.write_ram(address.0 as u16, self.read_register(register))?;
@@ -505,7 +505,9 @@ impl Cpu {
 
 	/// Skips the current instruction, even if it is a break instruction.
 	pub fn skip(&mut self) {
-		self.program_counter += 1;
+		if let Some(current_instruction) = self.get_current_instruction() {
+			self.program_counter += current_instruction.get_word_size();
+		}
 	}
 }
 

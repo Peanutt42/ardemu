@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Sub};
 
 use crate::{parse_number_operand, AsmOperand, AsmParseErrorType};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -82,9 +82,26 @@ impl Add<u16> for WordAddress {
 		WordAddress(self.0.add(rhs as u32))
 	}
 }
+impl Sub<WordAddress> for WordAddress {
+	type Output = WordAddress;
+
+	fn sub(self, rhs: WordAddress) -> WordAddress {
+		WordAddress(self.0 - rhs.0)
+	}
+}
 impl AddAssign<u16> for WordAddress {
 	fn add_assign(&mut self, rhs: u16) {
 		self.0.add_assign(rhs as u32);
+	}
+}
+impl AddAssign<u8> for WordAddress {
+	fn add_assign(&mut self, rhs: u8) {
+		self.0.add_assign(rhs as u32);
+	}
+}
+impl AddAssign<i32> for WordAddress {
+	fn add_assign(&mut self, rhs: i32) {
+		*self = Self(self.0.saturating_add_signed(rhs));
 	}
 }
 impl std::fmt::Display for WordAddress {

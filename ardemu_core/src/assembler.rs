@@ -1,4 +1,4 @@
-use crate::{AsmParseError, AsmParseErrorType, Instruction, Program};
+use crate::{AsmParseError, AsmParseErrorType, Instruction, Opcode, Program, WordAddress};
 use std::collections::HashMap;
 
 struct Line {
@@ -94,8 +94,8 @@ enum IntermediateInstruction {
 impl IntermediateInstruction {
 	fn resolve_into_instruction(
 		self,
-		program_address: u16,
-		symbol_table: &HashMap<String, u16>,
+		program_address: WordAddress,
+		symbol_table: &HashMap<String, WordAddress>,
 	) -> Result<Instruction, AsmParseError> {
 		let resolve_symbol = |symbol: String, line_number: usize| {
 			symbol_table.get(&symbol).copied().ok_or(AsmParseError::new(
@@ -108,34 +108,43 @@ impl IntermediateInstruction {
 			Self::Jmp {
 				symbol,
 				line_number,
-			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Jmp {
-				word_address: address.into(),
-			}),
+			} => resolve_symbol(symbol, line_number)
+				.map(|word_address| Instruction::Jmp { word_address }),
 			Self::Call {
 				symbol,
 				line_number,
-			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Call {
-				word_address: address.into(),
-			}),
+			} => resolve_symbol(symbol, line_number)
+				.map(|word_address| Instruction::Call { word_address }),
 			Self::Breq {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Breq {
-				word_offset: ((address as i32 - program_address as i32) as i8 - 1).into(),
+				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
 			}),
 			Self::Brne {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brne {
-				word_offset: ((address as i32 - program_address as i32) as i8 - 1).into(),
+				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
 			}),
 			Self::Brlt {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brlt {
-				word_offset: ((address as i32 - program_address as i32) as i8 - 1).into(),
+				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
 			}),
 			Self::Instruction(instruction) => Ok(instruction),
+		}
+	}
+
+	fn get_word_size(&self) -> u8 {
+		match self {
+			Self::Instruction(instruction) => instruction.get_word_size(),
+			Self::Breq { .. } => 1, // see of Instruction::Breq::get_word_size()
+			Self::Brne { .. } => 1, // see of Instruction::Brne::get_word_size()
+			Self::Brlt { .. } => 1, // see of Instruction::Brlt::get_word_size()
+			Self::Call { .. } => 2, // see of Instruction::Call::get_word_size()
+			Self::Jmp { .. } => 2,  // see of Instruction::Jmp::get_word_size()
 		}
 	}
 }
@@ -211,11 +220,12 @@ pub fn assemble(asm: &str) -> Result<Program, AsmParseError> {
 		.collect();
 
 	// maps symbols to program addresses
-	let mut symbol_table: HashMap<String, u16> = HashMap::new();
-	let mut intermediate_instructions: Vec<IntermediateInstruction> = Vec::new();
+	let mut symbol_table: HashMap<String, WordAddress> = HashMap::new();
+	let mut program_address = WordAddress(0);
+	let mut intermediate_instructions: Vec<(WordAddress, IntermediateInstruction)> = Vec::new();
 	for line in lines {
 		if let Some(label) = &line.label {
-			symbol_table.insert(label.clone(), intermediate_instructions.len() as u16);
+			symbol_table.insert(label.clone(), program_address);
 		}
 
 		let (mnemonic, operands) = split_mnemonic_operands(&line.instruction);
@@ -225,15 +235,14 @@ pub fn assemble(asm: &str) -> Result<Program, AsmParseError> {
 
 		let instruction = parse_instruction(line.line_number, &mnemonic, &operands)
 			.map_err(|error| AsmParseError::new(error, line.line_number))?;
-		intermediate_instructions.push(instruction);
+		program_address += instruction.get_word_size() as u16;
+		intermediate_instructions.push((program_address, instruction));
 	}
 
 	let mut instructions: Vec<Instruction> = Vec::with_capacity(intermediate_instructions.len());
-	for (program_address, intermediate_instruction) in
-		intermediate_instructions.into_iter().enumerate()
-	{
-		let instruction = intermediate_instruction
-			.resolve_into_instruction(program_address as u16, &symbol_table)?;
+	for (program_address, intermediate_instruction) in intermediate_instructions.into_iter() {
+		let instruction =
+			intermediate_instruction.resolve_into_instruction(program_address, &symbol_table)?;
 		instructions.push(instruction);
 	}
 

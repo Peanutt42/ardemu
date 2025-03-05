@@ -58,7 +58,8 @@ fn test_assemble_every_instruction() {
 			out 0x042, r0
 			in r0, 0x042
 			",
-	);
+	)
+	.expect("failed to assemble test code");
 
 	let expected = Program::new(&[
 		Instruction::Nop {},
@@ -123,15 +124,15 @@ fn test_assemble_every_instruction() {
 		},
 		// update offset, if relative offset to 'begin' changes in the source code
 		Instruction::Breq {
-			word_offset: WordOffset8(-24),
-		},
-		// update offset, if relative offset to 'begin' changes in the source code
-		Instruction::Brne {
 			word_offset: WordOffset8(-25),
 		},
 		// update offset, if relative offset to 'begin' changes in the source code
-		Instruction::Brlt {
+		Instruction::Brne {
 			word_offset: WordOffset8(-26),
+		},
+		// update offset, if relative offset to 'begin' changes in the source code
+		Instruction::Brlt {
+			word_offset: WordOffset8(-27),
 		},
 		Instruction::Call {
 			word_address: WordAddress(0),
@@ -219,7 +220,13 @@ fn test_assemble_every_instruction() {
 		},
 	]);
 
-	assert_eq!(program, Ok(expected))
+	assert_eq!(program.len(), expected.len());
+	for (program_address, instruction) in program.iter() {
+		let expected_instruction = expected.get(program_address).expect(
+			"invalid program address from assembled program, could not find in expected program",
+		);
+		assert_eq!(instruction, expected_instruction, "instruction in {program_address} should be {expected_instruction}, but is {instruction}");
+	}
 }
 
 #[test]
