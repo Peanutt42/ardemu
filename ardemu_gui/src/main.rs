@@ -123,6 +123,10 @@ impl App {
 		}
 	}
 
+	fn theme(&self) -> Theme {
+		Theme::Dark
+	}
+
 	fn send_cpu_sim_message(&mut self, message: CpuSimMessage) {
 		if let Err(e) = self.cpu_sim_message_sender.send(message) {
 			eprintln!("Could not send CPU sim message: {e}");
@@ -640,6 +644,7 @@ fn cpu_simulation_thread(
 
 fn main() -> iced::Result {
 	iced::application(App::title, App::update, App::view)
+		.theme(App::theme)
 		.subscription(App::subscription)
 		.run()
 }
