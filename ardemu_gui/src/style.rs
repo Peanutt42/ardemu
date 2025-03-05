@@ -64,6 +64,7 @@ pub fn hidden_secondary_button_style(theme: &Theme, status: button::Status) -> b
 	match status {
 		button::Status::Active | button::Status::Disabled => button::Style {
 			background: None,
+			text_color: Color::WHITE,
 			..button::secondary(theme, status)
 		},
 		button::Status::Hovered | button::Status::Pressed => button::secondary(theme, status),
@@ -73,6 +74,7 @@ pub fn hidden_secondary_button_style(theme: &Theme, status: button::Status) -> b
 pub fn panel_style(_theme: &Theme) -> container::Style {
 	container::Style {
 		background: Some(Color::from_rgb8(1, 4, 9).into()),
+		text_color: Some(Color::WHITE),
 		border: rounded(8),
 		..Default::default()
 	}
@@ -81,6 +83,7 @@ pub fn panel_style(_theme: &Theme) -> container::Style {
 pub fn background_style(_theme: &Theme) -> container::Style {
 	container::Style {
 		background: Some(Color::from_rgb8(5, 9, 21).into()),
+		text_color: Some(Color::WHITE),
 		..Default::default()
 	}
 }
