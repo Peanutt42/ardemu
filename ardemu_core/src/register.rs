@@ -1,3 +1,5 @@
+use std::ops::{Add, AddAssign};
+
 use crate::{parse_number_operand, AsmOperand, AsmParseErrorType};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use self_rust_tokenize::SelfRustTokenize;
@@ -56,6 +58,86 @@ impl AsmOperand for Imm3 {
 impl std::fmt::Display for Imm3 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.0)
+	}
+}
+
+/// stores address in words (1 word = 2 bytes)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
+pub struct WordAddress(pub u32);
+
+impl From<u32> for WordAddress {
+	fn from(value: u32) -> Self {
+		Self(value)
+	}
+}
+impl From<u16> for WordAddress {
+	fn from(value: u16) -> Self {
+		Self(value as u32)
+	}
+}
+impl Add<u16> for WordAddress {
+	type Output = WordAddress;
+
+	fn add(self, rhs: u16) -> Self::Output {
+		WordAddress(self.0.add(rhs as u32))
+	}
+}
+impl AddAssign<u16> for WordAddress {
+	fn add_assign(&mut self, rhs: u16) {
+		self.0.add_assign(rhs as u32);
+	}
+}
+impl std::fmt::Display for WordAddress {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		//					address is displayed in bytes, 1 word = 2 bytes
+		write!(f, "{:#06X}", self.0 * 2)
+	}
+}
+impl AsmOperand for WordAddress {
+	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
+		parse_number_operand(operand).map(|n| WordAddress(n as u32))
+	}
+}
+
+/// stores offset in words (1 word = 2 bytes)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
+pub struct WordOffset16(pub i16);
+
+impl From<i16> for WordOffset16 {
+	fn from(value: i16) -> Self {
+		Self(value)
+	}
+}
+impl std::fmt::Display for WordOffset16 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		//					offset is displayed in bytes, 1 word = 2 bytes
+		write!(f, ".{:+}", self.0 * 2)
+	}
+}
+impl AsmOperand for WordOffset16 {
+	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
+		parse_number_operand(operand).map(|n| WordOffset16(n as i16))
+	}
+}
+
+/// stores offset in words (1 word = 2 bytes)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
+pub struct WordOffset8(pub i8);
+
+impl From<i8> for WordOffset8 {
+	fn from(value: i8) -> Self {
+		Self(value)
+	}
+}
+impl std::fmt::Display for WordOffset8 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		//					offset is displayed in bytes, 1 word = 2 bytes
+		write!(f, ".{:+}", self.0 * 2)
+	}
+}
+impl AsmOperand for WordOffset8 {
+	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
+		parse_number_operand(operand).map(|n| WordOffset8(n as i8))
 	}
 }
 

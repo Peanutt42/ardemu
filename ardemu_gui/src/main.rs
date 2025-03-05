@@ -5,8 +5,9 @@
 #![deny(unsafe_code)]
 
 use ardemu_core::{
-	assemble, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Instruction,
+	assemble, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Program,
 	Register::{self, R9},
+	WordAddress,
 };
 use iced::{
 	alignment::Vertical,
@@ -46,12 +47,12 @@ struct CpuSim {
 
 #[derive(Debug, Clone)]
 enum CpuSimMessage {
-	ResetAndLoadProgram(Vec<Instruction>),
+	ResetAndLoadProgram(Program),
 	SetSimulating(bool),
 	Step,
 	Skip,
-	AddBreakpoint(u16),
-	RemoveBreakpoint(u16),
+	AddBreakpoint(WordAddress),
+	RemoveBreakpoint(WordAddress),
 }
 
 #[derive(Debug)]
@@ -62,7 +63,7 @@ struct App {
 	memory_view_start_address: u32,
 	memory_view_start_address_input: Option<String>,
 	asm_source_code_text_content: text_editor::Content,
-	asm_output: Result<Vec<Instruction>, AsmParseError>,
+	asm_program: Result<Program, AsmParseError>,
 }
 
 impl Default for App {
@@ -89,7 +90,7 @@ impl Default for App {
 			memory_view_start_address: 0,
 			memory_view_start_address_input: None,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
-			asm_output,
+			asm_program: asm_output,
 		}
 	}
 }
@@ -103,8 +104,8 @@ enum Message {
 	AsmSourceCodeChanged(text_editor::Action),
 	AsmSourceCodeUnindent,
 	UpdateCpuState,
-	AddBreakpoint(u16),
-	RemoveBreakpoint(u16),
+	AddBreakpoint(WordAddress),
+	RemoveBreakpoint(WordAddress),
 	ChangeMemoryViewStartAddressInput(String),
 	ChangeMemoryViewStartAddressFromInput,
 	ChangeMemoryViewStartAddress(u32),
@@ -116,7 +117,7 @@ impl App {
 	}
 
 	fn subscription(&self) -> Subscription<Message> {
-		match &self.asm_output {
+		match &self.asm_program {
 			Ok(_) => window::frames().map(|_| Message::UpdateCpuState),
 			_ => Subscription::none(),
 		}
@@ -136,7 +137,7 @@ impl App {
 			}
 			Message::ResetCpu => {
 				self.send_cpu_sim_message(CpuSimMessage::ResetAndLoadProgram(
-					self.asm_output.clone().ok().unwrap_or_default(),
+					self.asm_program.clone().ok().unwrap_or_default(),
 				));
 			}
 			Message::Step => self.send_cpu_sim_message(CpuSimMessage::Step),
@@ -145,13 +146,13 @@ impl App {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
 				if is_edit {
-					self.asm_output = assemble(&self.asm_source_code_text_content.text());
+					self.asm_program = assemble(&self.asm_source_code_text_content.text());
 					self.update(Message::ResetCpu);
 				}
 			}
 			Message::AsmSourceCodeUnindent => {
 				unindent_text(&mut self.asm_source_code_text_content);
-				self.asm_output = assemble(&self.asm_source_code_text_content.text());
+				self.asm_program = assemble(&self.asm_source_code_text_content.text());
 				self.update(Message::ResetCpu);
 			}
 			Message::UpdateCpuState => {
@@ -240,21 +241,20 @@ impl App {
 
 		column![
 			text("Instructions:"),
-			container(match &self.asm_output {
-				Ok(asm_instructions) => {
+			container(match &self.asm_program {
+				Ok(asm_program) => {
 					scrollable(
 						Column::with_children(
-							asm_instructions
+							asm_program
 								.iter()
-								.enumerate()
-								.map(|(i, instr)| {
-									let address = i as u16;
+								.map(|(program_address, instruction)| {
 									let breakpoint_set_here =
-										cpu.get_breakpoints().contains(&address);
-									let instr_currently_executing = program_counter == address;
+										cpu.get_breakpoints().contains(&program_address);
+									let instr_currently_executing =
+										program_counter == program_address;
 
 									row![
-										button(text!("{}:", Imm16(address)).font(Font::MONOSPACE))
+										button(text!("{program_address}:").font(Font::MONOSPACE))
 											.style(move |t, s| {
 												if breakpoint_set_here {
 													if instr_currently_executing {
@@ -268,13 +268,14 @@ impl App {
 											})
 											.padding(Padding::new(2.5).left(5.0).right(5.0))
 											.on_press(
-												if cpu.get_breakpoints().contains(&address) {
-													Message::RemoveBreakpoint(address)
+												if cpu.get_breakpoints().contains(&program_address)
+												{
+													Message::RemoveBreakpoint(program_address)
 												} else {
-													Message::AddBreakpoint(address)
+													Message::AddBreakpoint(program_address)
 												}
 											),
-										text!("{instr}").font(Font::MONOSPACE).color_maybe(
+										text!("{instruction}").font(Font::MONOSPACE).color_maybe(
 											if instr_currently_executing {
 												Some(Color::from_rgb(1.0, 0.0, 0.0))
 											} else {

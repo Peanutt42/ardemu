@@ -1,8 +1,8 @@
 use ihex::{Reader, Record};
 
-use crate::{Instruction, LoadIHex, Opcode};
+use crate::{Instruction, LoadIHex, Opcode, Program};
 
-pub fn load_ihex_str(ihex_content: &str) -> Result<Vec<Instruction>, LoadIHex> {
+pub fn load_ihex_str(ihex_content: &str) -> Result<Program, LoadIHex> {
 	let mut opcodes_binary = Vec::new();
 	let ihex_reader = Reader::new(ihex_content);
 	for record in ihex_reader {
@@ -51,5 +51,5 @@ pub fn load_ihex_str(ihex_content: &str) -> Result<Vec<Instruction>, LoadIHex> {
 		}
 	}
 
-	Ok(instructions)
+	Ok(Program::new(&instructions))
 }

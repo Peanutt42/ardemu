@@ -1,11 +1,14 @@
 use crate::{
 	Imm16, Imm3, Imm8, Instruction, LowerEvenRegister, Register, RegisterAddress, UpperRegister,
-	WordRegister,
+	WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
 
 pub trait Opcode: Sized {
 	fn is_32bit(&self) -> bool;
-	fn get_byte_size(&self) -> u8;
+	fn get_word_size(&self) -> u8;
+	fn get_byte_size(&self) -> u8 {
+		self.get_word_size() * 2
+	}
 	fn get_cycles(&self) -> u8;
 	fn load(opcode_32bit: u32) -> Option<Self>;
 }
@@ -21,11 +24,11 @@ impl Opcode for Instruction {
 		)
 	}
 
-	fn get_byte_size(&self) -> u8 {
+	fn get_word_size(&self) -> u8 {
 		if self.is_32bit() {
-			4
-		} else {
 			2
+		} else {
+			1
 		}
 	}
 
@@ -68,7 +71,7 @@ impl Opcode for Instruction {
 		}
 
 		/// ____ kkkk kkkk kkkk
-		fn load_k12(opcode_16bit: u16) -> i16 {
+		fn load_k12(opcode_16bit: u16) -> WordOffset16 {
 			let k12 = opcode_16bit & 0x0fff;
 			let negative = (k12 & 0x0800) != 0;
 			if negative {
@@ -76,6 +79,7 @@ impl Opcode for Instruction {
 			} else {
 				k12 as i16
 			}
+			.into()
 		}
 
 		/// ____ ___r rrrr ____
@@ -109,8 +113,8 @@ impl Opcode for Instruction {
 		}
 
 		/// ____ ___k kkkk ___k kkkk kkkk kkkk kkkk    (32-bit!)
-		fn load_k24(opcode_32bit: u32) -> u32 {
-			((opcode_32bit & 0x01f00000) >> 3) | (opcode_32bit & 0x0001ffff)
+		fn load_k24(opcode_32bit: u32) -> WordAddress {
+			(((opcode_32bit & 0x01f00000) >> 3) | (opcode_32bit & 0x0001ffff)).into()
 		}
 
 		/// ____ ____ dddd rrrr
@@ -124,7 +128,7 @@ impl Opcode for Instruction {
 		}
 
 		/// ____ __kk kkkk k___
-		fn load_k7(opcode_16bit: u16) -> i8 {
+		fn load_k7(opcode_16bit: u16) -> WordOffset8 {
 			let k7 = (opcode_16bit & 0x03f8) >> 3;
 			let negative = (k7 & 0x40) != 0;
 			if negative {
@@ -132,6 +136,7 @@ impl Opcode for Instruction {
 			} else {
 				k7 as i8
 			}
+			.into()
 		}
 
 		match front_4_bits {
@@ -307,18 +312,12 @@ impl Opcode for Instruction {
 			0b1111 => match (opcode_16bit & 0x0c00) >> 10 {
 				//				3 bits at then end of opcode_16bit
 				0b00 => match opcode_16bit & 0x0007 {
-					0b001 => {
-						let offset = load_k7(opcode_16bit);
-						Some(Instruction::Breq {
-							word_offset: offset,
-						})
-					}
-					0b100 => {
-						let offset = load_k7(opcode_16bit);
-						Some(Instruction::Brlt {
-							word_offset: offset,
-						})
-					}
+					0b001 => Some(Instruction::Breq {
+						word_offset: load_k7(opcode_16bit),
+					}),
+					0b100 => Some(Instruction::Brlt {
+						word_offset: load_k7(opcode_16bit),
+					}),
 					_ => None,
 				},
 				0b01 => {

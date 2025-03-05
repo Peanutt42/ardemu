@@ -2,7 +2,7 @@ use std::{collections::HashSet, ops::RangeInclusive};
 
 use crate::{
 	get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16, CpuError, Flags, Instruction,
-	LowerEvenRegister, Register,
+	LowerEvenRegister, Program, Register, WordAddress,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,15 +17,15 @@ pub enum CpuStatus {
 
 #[derive(Debug, Clone)]
 pub struct Cpu {
-	program: Box<[Instruction]>,
+	program: Program,
 	registers: [u8; Register::COUNT],
 	// in words (1 word = 2 bytes)
-	program_counter: u16,
+	program_counter: WordAddress,
 	stack_pointer: u16,
 	flags: Flags,
 	sram: [u8; Self::SRAM_SIZE], // SRAM (64KB)
 	// contains the program address of the breakpoints
-	breakpoints: HashSet<u16>,
+	breakpoints: HashSet<WordAddress>,
 }
 
 impl Cpu {
@@ -34,11 +34,11 @@ impl Cpu {
 	const STACK_START_ADDRESS: u16 = 0xFEFF;
 	const STACK_END_ADDRESS: u16 = 0xFC00;
 
-	pub fn new(program: impl Into<Box<[Instruction]>>) -> Self {
+	pub fn new(program: Program) -> Self {
 		Self {
-			program: program.into(),
+			program,
 			registers: [0; Register::COUNT],
-			program_counter: 0,
+			program_counter: WordAddress(0),
 			stack_pointer: Self::STACK_START_ADDRESS,
 			flags: Flags::default(),
 			sram: [0u8; Self::SRAM_SIZE],
@@ -49,21 +49,21 @@ impl Cpu {
 	/// resets everything except the last loaded program
 	pub fn reset(&mut self) {
 		self.registers = [0; Register::COUNT];
-		self.program_counter = 0;
+		self.program_counter = WordAddress(0);
 		self.stack_pointer = Self::STACK_START_ADDRESS;
 		self.sram = [0u8; Self::SRAM_SIZE];
 		self.breakpoints.clear();
 	}
 
-	pub fn add_breakpoint(&mut self, address: u16) {
+	pub fn add_breakpoint(&mut self, address: WordAddress) {
 		self.breakpoints.insert(address);
 	}
 
-	pub fn remove_breakpoint(&mut self, address: u16) {
+	pub fn remove_breakpoint(&mut self, address: WordAddress) {
 		self.breakpoints.remove(&address);
 	}
 
-	pub fn get_breakpoints(&self) -> &HashSet<u16> {
+	pub fn get_breakpoints(&self) -> &HashSet<WordAddress> {
 		&self.breakpoints
 	}
 
@@ -71,12 +71,12 @@ impl Cpu {
 		self.flags
 	}
 
-	pub fn get_program_counter(&self) -> u16 {
+	pub fn get_program_counter(&self) -> WordAddress {
 		self.program_counter
 	}
 
 	pub fn get_current_instruction(&self) -> Option<Instruction> {
-		self.program.get(self.program_counter as usize).copied()
+		self.program.get(self.program_counter)
 	}
 
 	pub fn read_register(&self, reg: impl Into<Register>) -> u8 {
@@ -152,16 +152,16 @@ impl Cpu {
 		let value = self.sram[self.stack_pointer as usize];
 		Ok(value)
 	}
-	fn push16(&mut self, value: u16) -> Result<(), CpuError> {
-		let [low, high] = u8s_from_u16(value);
+	fn push_address(&mut self, address: WordAddress) -> Result<(), CpuError> {
+		let [low, high] = u8s_from_u16(address.0 as u16);
 		self.push(low)?;
 		self.push(high)?;
 		Ok(())
 	}
-	fn pop16(&mut self) -> Result<u16, CpuError> {
+	fn pop_address(&mut self) -> Result<WordAddress, CpuError> {
 		let high = self.pop()?;
 		let low = self.pop()?;
-		Ok(u8s_to_u16(low, high))
+		Ok(u8s_to_u16(low, high).into())
 	}
 
 	pub fn execute(&mut self, instruction: Instruction) -> Result<CpuStatus, CpuError> {
@@ -176,10 +176,8 @@ impl Cpu {
 			Instruction::Break => {
 				return Ok(CpuStatus::BreakHit);
 			}
-			Instruction::Jmp {
-				word_address: address,
-			} => {
-				self.program_counter = address as u16;
+			Instruction::Jmp { word_address } => {
+				self.program_counter = word_address;
 			}
 			Instruction::Eor { reg_dest, reg_read } => {
 				let result = self.read_register(reg_dest) ^ self.read_register(reg_read);
@@ -261,13 +259,11 @@ impl Cpu {
 				self.write_register_pair16(reg_dest, value);
 				self.program_counter += 1;
 			}
-			Instruction::RJmp {
-				word_offset: offset,
-			} => {
-				let new_program_counter = (self.program_counter as i32)
-					.wrapping_add(offset as i32)
+			Instruction::RJmp { word_offset } => {
+				let new_program_counter = (self.program_counter.0 as i32)
+					.wrapping_add(word_offset.0 as i32)
 					.wrapping_add(1);
-				self.program_counter = new_program_counter as u16;
+				self.program_counter = WordAddress(new_program_counter as u32);
 			}
 			Instruction::Push { register } => {
 				self.push(self.read_register(register))?;
@@ -307,50 +303,42 @@ impl Cpu {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Breq {
-				word_offset: offset,
-			} => {
+			Instruction::Breq { word_offset } => {
 				if self.flags.zero() {
-					let new_program_counter = (self.program_counter as i32)
-						.wrapping_add(offset as i32)
+					let new_program_counter = (self.program_counter.0 as i32)
+						.wrapping_add(word_offset.0 as i32)
 						.wrapping_add(1);
-					self.program_counter = new_program_counter as u16;
+					self.program_counter = WordAddress(new_program_counter as u32);
 				} else {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Brne {
-				word_offset: offset,
-			} => {
+			Instruction::Brne { word_offset } => {
 				if !self.flags.zero() {
-					let new_program_counter = (self.program_counter as i32)
-						.wrapping_add(offset as i32)
+					let new_program_counter = (self.program_counter.0 as i32)
+						.wrapping_add(word_offset.0 as i32)
 						.wrapping_add(1);
-					self.program_counter = new_program_counter as u16;
+					self.program_counter = WordAddress(new_program_counter as u32);
 				} else {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Brlt {
-				word_offset: offset,
-			} => {
+			Instruction::Brlt { word_offset } => {
 				if self.flags.sign() {
-					let new_program_counter = (self.program_counter as i32)
-						.wrapping_add(offset as i32)
+					let new_program_counter = (self.program_counter.0 as i32)
+						.wrapping_add(word_offset.0 as i32)
 						.wrapping_add(1);
-					self.program_counter = new_program_counter as u16;
+					self.program_counter = WordAddress(new_program_counter as u32);
 				} else {
 					self.program_counter += 1;
 				}
 			}
-			Instruction::Call {
-				word_address: address,
-			} => {
-				self.push16(self.program_counter + 1)?;
-				self.program_counter = address as u16;
+			Instruction::Call { word_address } => {
+				self.push_address(self.program_counter + 1)?;
+				self.program_counter = word_address;
 			}
 			Instruction::Ret => {
-				self.program_counter = self.pop16()?;
+				self.program_counter = self.pop_address()?;
 			}
 			Instruction::Sub { reg_dest, reg_read } => {
 				let dest_value = self.read_register(reg_dest);
@@ -523,6 +511,6 @@ impl Cpu {
 
 impl Default for Cpu {
 	fn default() -> Self {
-		Self::new([])
+		Self::new(Program::default())
 	}
 }

@@ -1,7 +1,7 @@
 use ardemu_core::{
-	Cpu, CpuError, CpuStatus, Instruction, LowerEvenRegister,
+	Cpu, CpuError, CpuStatus, Instruction, LowerEvenRegister, Program,
 	Register::{self, R0, R1, R16, R17},
-	UpperRegister, WordRegister,
+	UpperRegister, WordAddress, WordRegister,
 };
 
 #[test]
@@ -44,8 +44,11 @@ fn test_stackunderflow() {
 #[test]
 fn test_execute_jmp() {
 	let mut cpu = Cpu::default();
-	cpu.execute(Instruction::Jmp { word_address: 42 }).unwrap();
-	assert_eq!(cpu.get_program_counter(), 42);
+	cpu.execute(Instruction::Jmp {
+		word_address: WordAddress(42),
+	})
+	.unwrap();
+	assert_eq!(cpu.get_program_counter(), WordAddress(42));
 }
 
 #[test]
@@ -60,7 +63,7 @@ fn test_register_pair() {
 
 #[test]
 fn test_breakpoint() {
-	let program = vec![
+	let instructions = [
 		Instruction::Ldi {
 			register: UpperRegister::R16,
 			value: 42.into(),
@@ -79,8 +82,8 @@ fn test_breakpoint() {
 			value: 42.into(),
 		},
 	];
-	let mut cpu = Cpu::new(program);
-	cpu.add_breakpoint(2);
+	let mut cpu = Cpu::new(Program::new(&instructions));
+	cpu.add_breakpoint(WordAddress(2));
 	assert_eq!(cpu.step(), Ok(CpuStatus::Normal));
 	assert_eq!(cpu.step(), Ok(CpuStatus::Normal));
 	assert_eq!(cpu.step(), Ok(CpuStatus::BreakpointHit));

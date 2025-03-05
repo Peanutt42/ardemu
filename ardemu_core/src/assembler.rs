@@ -1,4 +1,4 @@
-use crate::{AsmParseError, AsmParseErrorType, Instruction};
+use crate::{AsmParseError, AsmParseErrorType, Instruction, Program};
 use std::collections::HashMap;
 
 struct Line {
@@ -121,19 +121,19 @@ impl IntermediateInstruction {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Breq {
-				word_offset: (address as i32 - program_address as i32) as i8 - 1,
+				word_offset: ((address as i32 - program_address as i32) as i8 - 1).into(),
 			}),
 			Self::Brne {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brne {
-				word_offset: (address as i32 - program_address as i32) as i8 - 1,
+				word_offset: ((address as i32 - program_address as i32) as i8 - 1).into(),
 			}),
 			Self::Brlt {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brlt {
-				word_offset: (address as i32 - program_address as i32) as i8 - 1,
+				word_offset: ((address as i32 - program_address as i32) as i8 - 1).into(),
 			}),
 			Self::Instruction(instruction) => Ok(instruction),
 		}
@@ -202,7 +202,7 @@ fn parse_instruction(
 	}
 }
 
-pub fn assemble(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
+pub fn assemble(asm: &str) -> Result<Program, AsmParseError> {
 	let lines: Vec<Line> = asm
 		.lines()
 		.enumerate()
@@ -232,11 +232,10 @@ pub fn assemble(asm: &str) -> Result<Vec<Instruction>, AsmParseError> {
 	for (program_address, intermediate_instruction) in
 		intermediate_instructions.into_iter().enumerate()
 	{
-		instructions.push(
-			intermediate_instruction
-				.resolve_into_instruction(program_address as u16, &symbol_table)?,
-		);
+		let instruction = intermediate_instruction
+			.resolve_into_instruction(program_address as u16, &symbol_table)?;
+		instructions.push(instruction);
 	}
 
-	Ok(instructions)
+	Ok(Program::new(&instructions))
 }

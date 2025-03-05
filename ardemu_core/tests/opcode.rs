@@ -1,7 +1,7 @@
 use ardemu_core::{
 	Instruction, LowerEvenRegister, Opcode,
 	Register::{R0, R15, R16, R31},
-	UpperRegister, WordRegister,
+	UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
 
 #[test]
@@ -53,7 +53,9 @@ fn test_load_instructions_from_opcodes() {
 	test_16bit(0b1001_0101_0000_1000, Instruction::Ret);
 	test_16bit(
 		0b1100_0000_0000_0000 | (u16::from_le_bytes((-2047_i16).to_le_bytes()) & 0x0fff),
-		Instruction::RJmp { word_offset: -2047 },
+		Instruction::RJmp {
+			word_offset: WordOffset16(-2047),
+		},
 	);
 	test_16bit(0b1001_0101_1111_0111, Instruction::Ror { register: R31 });
 	test_16bit(
@@ -110,7 +112,7 @@ fn test_load_instructions_from_opcodes() {
 	test_32bit(
 		0b1001_0100_0000_1100_1111_1111_1111_1111,
 		Instruction::Jmp {
-			word_address: 0xFFFF,
+			word_address: WordAddress(0xffff),
 		},
 	);
 	test_16bit(
@@ -182,20 +184,26 @@ fn test_load_instructions_from_opcodes() {
 	);
 	test_16bit(
 		0b1111_0010_0000_1001,
-		Instruction::Breq { word_offset: -63 },
+		Instruction::Breq {
+			word_offset: WordOffset8(-63),
+		},
 	);
 	test_16bit(
 		0b1111_0110_0000_1001,
-		Instruction::Brne { word_offset: -63 },
+		Instruction::Brne {
+			word_offset: WordOffset8(-63),
+		},
 	);
 	test_16bit(
 		0b1111_0110_0000_1100,
-		Instruction::Brne { word_offset: -63 },
+		Instruction::Brne {
+			word_offset: WordOffset8(-63),
+		},
 	);
 	test_32bit(
 		0b1001_0100_0000_1110_0011_1111_1111_1111,
 		Instruction::Call {
-			word_address: 0x3FFF,
+			word_address: WordAddress(0x3FFF),
 		},
 	);
 	test_16bit(

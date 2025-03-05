@@ -7,16 +7,13 @@ use syn::{parse_macro_input, LitStr};
 pub fn assemble(input: TokenStream) -> TokenStream {
 	let asm_input = parse_macro_input!(input as LitStr).value();
 	let expanded = match ardemu_core::assemble(&asm_input) {
-		Ok(instructions) => {
-			let instruction_tokens = instructions
-				.into_iter()
-				.map(|instr| instr.to_tokens())
-				.collect::<Vec<_>>();
+		Ok(program) => {
+			let program_tokens = program.to_tokens();
 			quote! {
 				{
-					use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, LowerEvenRegister, Imm3, Imm8, Imm16};
+					use ardemu_core::{Program, Instruction, Register, UpperRegister, WordRegister, WordAddress, WordOffset8, WordOffset16, LowerEvenRegister, Imm3, Imm8, Imm16};
 
-					[ #(#instruction_tokens),* ]
+					#program_tokens
 				}
 			}
 		}
@@ -44,20 +41,17 @@ pub fn include_asm(input: TokenStream) -> TokenStream {
 	let expanded = match std::fs::read_to_string(&asm_filepath) {
 		Ok(asm_file_contents) => {
 			match ardemu_core::assemble(&asm_file_contents) {
-				Ok(instructions) => {
-					let instruction_tokens = instructions
-						.into_iter()
-						.map(|instr| instr.to_tokens())
-						.collect::<Vec<_>>();
+				Ok(program) => {
+					let program_tokens = program.to_tokens();
 
 					quote! {
 						{
-							use ardemu_core::{Instruction, Register, UpperRegister, WordRegister, LowerEvenRegister, Imm3, Imm8, Imm16};
+							use ardemu_core::{Program, Instruction, Register, UpperRegister, WordRegister, WordAddress, WordOffset8, WordOffset16, LowerEvenRegister, Imm3, Imm8, Imm16};
 
 							/// this will make the compiler recompile when the file changes
 							const _RECOMPILE_IF_CHANGED_HANDLE: &str = include_str!(#asm_filepath_str);
 
-							[ #(#instruction_tokens),* ]
+							#program_tokens
 						}
 					}
 				}
