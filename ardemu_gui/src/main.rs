@@ -32,7 +32,7 @@ mod highlighter;
 mod style;
 use style::{
 	background_style, button_style, format_big_number, hidden_secondary_button_style, panel_style,
-	text_editor_style,
+	secondary_text_style, text_editor_style,
 };
 
 mod code_editor;
@@ -60,6 +60,7 @@ struct App {
 	simulate_cpu: bool,
 	cpu_sim: triple_buffer::Output<CpuSim>,
 	cpu_sim_message_sender: std::sync::mpsc::Sender<CpuSimMessage>,
+	cpu_sim_dirty: bool,
 	memory_view_start_address: u32,
 	memory_view_start_address_input: Option<String>,
 	asm_source_code_text_content: text_editor::Content,
@@ -84,9 +85,10 @@ impl Default for App {
 		std::thread::spawn(move || cpu_simulation_thread(receiver, cpu, writable_cpu_sim));
 
 		Self {
-			cpu_sim: readable_cpu_sim,
 			simulate_cpu: false,
+			cpu_sim: readable_cpu_sim,
 			cpu_sim_message_sender: sender,
+			cpu_sim_dirty: false,
 			memory_view_start_address: 0,
 			memory_view_start_address_input: None,
 			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
@@ -118,8 +120,14 @@ impl App {
 
 	fn subscription(&self) -> Subscription<Message> {
 		match &self.asm_program {
-			Ok(_) => window::frames().map(|_| Message::UpdateCpuState),
-			_ => Subscription::none(),
+			Ok(_) if self.simulate_cpu => window::frames().map(|_| Message::UpdateCpuState),
+			_ => {
+				if self.cpu_sim_dirty {
+					window::frames().map(|_| Message::UpdateCpuState)
+				} else {
+					Subscription::none()
+				}
+			}
 		}
 	}
 
@@ -131,6 +139,7 @@ impl App {
 		if let Err(e) = self.cpu_sim_message_sender.send(message) {
 			eprintln!("Could not send CPU sim message: {e}");
 		};
+		self.cpu_sim_dirty = true;
 	}
 
 	fn update(&mut self, message: Message) {
@@ -160,7 +169,9 @@ impl App {
 				self.update(Message::ResetCpu);
 			}
 			Message::UpdateCpuState => {
-				self.cpu_sim.update();
+				if self.cpu_sim.update() {
+					self.cpu_sim_dirty = false;
+				}
 			}
 			Message::AddBreakpoint(address) => {
 				self.send_cpu_sim_message(CpuSimMessage::AddBreakpoint(address));
@@ -258,27 +269,30 @@ impl App {
 										program_counter == program_address;
 
 									row![
-										button(text!("{program_address}:").font(Font::MONOSPACE))
-											.style(move |t, s| {
-												if breakpoint_set_here {
-													if instr_currently_executing {
-														button::danger(t, s)
-													} else {
-														button::primary(t, s)
-													}
+										button(
+											text!("{program_address}:")
+												.font(Font::MONOSPACE)
+												.style(secondary_text_style)
+										)
+										.style(move |t, s| {
+											if breakpoint_set_here {
+												if instr_currently_executing {
+													button::danger(t, s)
 												} else {
-													hidden_secondary_button_style(t, s)
+													button::primary(t, s)
 												}
-											})
-											.padding(Padding::new(2.5).left(5.0).right(5.0))
-											.on_press(
-												if cpu.get_breakpoints().contains(&program_address)
-												{
-													Message::RemoveBreakpoint(program_address)
-												} else {
-													Message::AddBreakpoint(program_address)
-												}
-											),
+											} else {
+												hidden_secondary_button_style(t, s)
+											}
+										})
+										.padding(Padding::new(2.5).left(5.0).right(5.0))
+										.on_press(
+											if cpu.get_breakpoints().contains(&program_address) {
+												Message::RemoveBreakpoint(program_address)
+											} else {
+												Message::AddBreakpoint(program_address)
+											}
+										),
 										text!("{instruction}").font(Font::MONOSPACE).color_maybe(
 											if instr_currently_executing {
 												Some(Color::from_rgb(1.0, 0.0, 0.0))
@@ -316,9 +330,13 @@ impl App {
 					let value = Imm8(cpu.read_register(*reg));
 					let padding_space = if *reg <= R9 { " " } else { "" };
 
-					text(format!("{reg}: {padding_space}{value}"))
-						.font(Font::MONOSPACE)
-						.into()
+					row![
+						text!("{reg}: {padding_space}")
+							.font(Font::MONOSPACE)
+							.style(secondary_text_style),
+						text!("{value}").font(Font::MONOSPACE)
+					]
+					.into()
 				}))
 				.spacing(10)
 				.padding(Padding::new(10.0).right(20))
@@ -334,9 +352,30 @@ impl App {
 			text("Flags:"),
 			container(scrollable(
 				Column::with_children(FlagType::ALL.iter().map(|flag_type| {
-					text!("{flag_type}: {}", cpu.flags().get(*flag_type) as u8)
-						.font(Font::MONOSPACE)
-						.into()
+					let flag_set = cpu.flags().get(*flag_type);
+
+					container(
+						text!("{flag_type}: {}", flag_set as u8)
+							.font(Font::MONOSPACE)
+							.style(if flag_set {
+								move |_t: &Theme| text::Style {
+									color: Some(Color::WHITE),
+								}
+							} else {
+								secondary_text_style
+							}),
+					)
+					.style(move |t: &Theme| {
+						if flag_set {
+							container::Style {
+								background: Some(t.extended_palette().primary.base.color.into()),
+								..Default::default()
+							}
+						} else {
+							container::Style::default()
+						}
+					})
+					.into()
 				}))
 				.spacing(10)
 				.padding(10) //.width(Fill)
@@ -384,7 +423,9 @@ impl App {
 											.saturating_add(index as u32 * Self::BYTES_PER_ROW)
 											as u16,
 									);
-									text!("{address} ").font(Font::MONOSPACE)
+									text!("{address} ")
+										.font(Font::MONOSPACE)
+										.style(secondary_text_style)
 								}
 							}
 							.height(Self::ROW_HEIGHT)
@@ -398,7 +439,10 @@ impl App {
 							mouse_area(column![
 								container(
 									Row::with_children((0..Self::BYTES_PER_ROW).map(|index| {
-										text!("{index:2x}").font(Font::MONOSPACE).into()
+										text!("{index:2x}")
+											.font(Font::MONOSPACE)
+											.style(secondary_text_style)
+											.into()
 									}))
 									.spacing(Self::DATA_COLUMN_SPACING)
 									.padding(Padding::default().left(2.5).right(2.5))

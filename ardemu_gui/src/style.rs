@@ -1,6 +1,6 @@
 use iced::{
 	border::rounded,
-	widget::{button, container, text_editor},
+	widget::{button, container, text, text_editor},
 	Border, Color, Theme,
 };
 
@@ -99,4 +99,10 @@ pub fn format_big_number(n: usize) -> String {
 		.collect::<Result<Vec<&str>, _>>()
 		.unwrap()
 		.join(",")
+}
+
+pub fn secondary_text_style(_theme: &Theme) -> text::Style {
+	text::Style {
+		color: Some(Color::from_rgb(0.85, 0.85, 0.85)),
+	}
 }
