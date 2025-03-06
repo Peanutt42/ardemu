@@ -2,13 +2,15 @@ use crate::{
 	AsmOperand, FlagType, Imm16, Imm3, Imm8, LowerEvenRegister, Register, RegisterAddress,
 	UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
-use ardemu_asm_parse_macro::ParseAsmInstruction;
-use ardemu_display_instr_macro::DisplayInstruction;
+use ardemu_instruction_helper_macro::{
+	DisplayInstruction, ParseAsmInstruction, ReferencedRegisters,
+};
 use self_rust_tokenize::SelfRustTokenize;
 
 #[derive(
 	Debug,
 	DisplayInstruction,
+	ReferencedRegisters,
 	Clone,
 	Copy,
 	PartialEq,
@@ -235,4 +237,16 @@ pub enum Instruction {
 	Out { address: Imm8, register: Register },
 	/// Clears global interrupt flag
 	Cli,
+}
+
+impl Instruction {
+	pub fn get_referenced_memory_address(&self) -> Option<u32> {
+		match self {
+			Self::Sts { address, .. } => Some(address.0 as u32),
+			Self::Lds { address, .. } => Some(address.0 as u32),
+			Self::In { address, .. } => Some(address.0 as u32),
+			Self::Out { address, .. } => Some(address.0 as u32),
+			_ => None,
+		}
+	}
 }

@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ardemu_display_instr_macro = { path = "../ardemu_macros/ardemu_display_instr_macro" }
-ardemu_asm_parse_macro = { path = "../ardemu_macros/ardemu_asm_parse_macro" }
+ardemu_instruction_helper_macro = { path = "../ardemu_macros/ardemu_instruction_helper_macro" }
 thiserror = { workspace = true }
 self-rust-tokenize = { workspace = true }
 num_enum = "0.7.3"

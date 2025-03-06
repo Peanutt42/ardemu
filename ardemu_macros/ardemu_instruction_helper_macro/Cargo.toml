@@ -1,5 +1,5 @@
 [package]
-name = "ardemu_asm_parse_macro"
+name = "ardemu_instruction_helper_macro"
 version = "0.1.0"
 edition = "2021"
 

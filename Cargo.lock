@@ -123,15 +123,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ardemu_asm_parse_macro"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.98",
-]
-
-[[package]]
 name = "ardemu_assemble_macro"
 version = "0.1.0"
 dependencies = [
@@ -146,22 +137,12 @@ dependencies = [
 name = "ardemu_core"
 version = "0.1.0"
 dependencies = [
- "ardemu_asm_parse_macro",
  "ardemu_assemble_macro",
- "ardemu_display_instr_macro",
+ "ardemu_instruction_helper_macro",
  "ihex",
  "num_enum",
  "self-rust-tokenize",
  "thiserror 2.0.11",
-]
-
-[[package]]
-name = "ardemu_display_instr_macro"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.98",
 ]
 
 [[package]]
@@ -172,6 +153,15 @@ dependencies = [
  "iced",
  "syntect",
  "triple_buffer",
+]
+
+[[package]]
+name = "ardemu_instruction_helper_macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]

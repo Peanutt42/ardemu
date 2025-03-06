@@ -101,6 +101,13 @@ pub fn format_big_number(n: usize) -> String {
 		.join(",")
 }
 
+/// sets text color to primary theme color
+pub fn primary_text_style(theme: &Theme) -> text::Style {
+	text::Style {
+		color: Some(theme.extended_palette().primary.base.color),
+	}
+}
+
 pub fn secondary_text_style(_theme: &Theme) -> text::Style {
 	text::Style {
 		color: Some(Color::from_rgb(0.85, 0.85, 0.85)),

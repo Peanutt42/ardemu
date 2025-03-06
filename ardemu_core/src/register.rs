@@ -389,6 +389,11 @@ impl AsmOperand for UpperRegister {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SelfRustTokenize)]
 pub struct RegisterAddress(pub Register);
 
+impl From<RegisterAddress> for Register {
+	fn from(value: RegisterAddress) -> Self {
+		value.0
+	}
+}
 impl From<Register> for RegisterAddress {
 	fn from(value: Register) -> Self {
 		Self(value)

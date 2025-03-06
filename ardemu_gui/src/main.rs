@@ -32,7 +32,7 @@ mod highlighter;
 mod style;
 use style::{
 	background_style, button_style, format_big_number, hidden_secondary_button_style, panel_style,
-	secondary_text_style, text_editor_style,
+	primary_text_style, secondary_text_style, text_editor_style,
 };
 
 mod code_editor;
@@ -323,17 +323,27 @@ impl App {
 	}
 
 	fn registers_pane(&self, cpu: &Cpu) -> Element<Message> {
+		let referenced_registers = match cpu.get_current_instruction() {
+			Some(instruction) => instruction.get_referenced_registers(),
+			None => Vec::new(),
+		};
+
 		column![
 			text("Registers:"),
 			container(scrollable(
 				Column::with_children(Register::ALL.iter().map(|reg| {
+					let referenced = referenced_registers.contains(reg);
 					let value = Imm8(cpu.read_register(*reg));
 					let padding_space = if *reg <= R9 { " " } else { "" };
 
 					row![
-						text!("{reg}: {padding_space}")
-							.font(Font::MONOSPACE)
-							.style(secondary_text_style),
+						text!("{reg}: {padding_space}").font(Font::MONOSPACE).style(
+							if referenced {
+								primary_text_style
+							} else {
+								secondary_text_style
+							}
+						),
 						text!("{value}").font(Font::MONOSPACE)
 					]
 					.into()
@@ -391,6 +401,11 @@ impl App {
 	const DATA_COLUMN_SPACING: f32 = 5.0;
 	const BYTES_PER_ROW: u32 = 16;
 	fn memory_pane<'a>(&'a self, cpu: &'a Cpu, portrait: bool) -> Element<'a, Message> {
+		let referenced_memory_address = match cpu.get_current_instruction() {
+			Some(instruction) => instruction.get_referenced_memory_address(),
+			None => None,
+		};
+
 		column![
 			text("Memory:"),
 			container(responsive(move |size| -> Element<Message> {
@@ -463,8 +478,22 @@ impl App {
 									{
 										Ok(data) => Row::with_children(
 											(0..Self::BYTES_PER_ROW).map(|byte_index| {
+												let memory_address = start_address + byte_index;
+
+												let referenced = match referenced_memory_address {
+													Some(referenced_memory_address) => {
+														memory_address == referenced_memory_address
+													}
+													None => false,
+												};
+
 												match data.get(byte_index as usize) {
-													Some(byte_value) => text!("{byte_value:2x}"),
+													Some(byte_value) => text!("{byte_value:2x}")
+														.style(if referenced {
+															primary_text_style
+														} else {
+															move |_t: &Theme| text::Style::default()
+														}),
 													None => text("--"),
 												}
 												.font(Font::MONOSPACE)

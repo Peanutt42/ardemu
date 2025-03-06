@@ -9,8 +9,7 @@ members = [
 	"ardemu_gui",
 	"ardemu_web",
 	"ardemu_macros/ardemu_assemble_macro",
-	"ardemu_macros/ardemu_asm_parse_macro",
-	"ardemu_macros/ardemu_display_instr_macro",
+	"ardemu_macros/ardemu_instruction_helper_macro",
 ]
 
 [workspace.dependencies]
