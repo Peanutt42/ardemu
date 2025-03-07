@@ -11,7 +11,7 @@ mod cpu;
 pub use cpu::{Cpu, CpuStatus};
 
 mod instruction;
-pub use instruction::Instruction;
+pub use instruction::{Instruction, MemoryAddressRange};
 
 mod program;
 pub use program::Program;

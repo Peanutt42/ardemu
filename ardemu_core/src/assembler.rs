@@ -211,6 +211,7 @@ fn parse_instruction(
 	}
 }
 
+/// Assembles the given assembly code into a program, including debug symbols (names of labels).
 pub fn assemble(asm: &str) -> Result<Program, AsmParseError> {
 	let lines: Vec<Line> = asm
 		.lines()
@@ -246,5 +247,13 @@ pub fn assemble(asm: &str) -> Result<Program, AsmParseError> {
 		instructions.push(instruction);
 	}
 
-	Ok(Program::new(&instructions))
+	let debug_symbol_table = symbol_table
+		.into_iter()
+		.map(|(name, address)| (address, name))
+		.collect::<HashMap<WordAddress, String>>();
+
+	Ok(Program::with_debug_symbols(
+		&instructions,
+		debug_symbol_table,
+	))
 }

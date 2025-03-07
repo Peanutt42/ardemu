@@ -1,17 +1,25 @@
-use self_rust_tokenize::SelfRustTokenize;
+use std::collections::HashMap;
 
 use crate::{Instruction, Opcode, WordAddress};
 
 /// Stores map of program address in words and instructions
-#[derive(Debug, Clone, SelfRustTokenize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
 	/// program is a list of instructions where the index is the word program address
 	/// -> None -> previous instruction is 32-bit
 	pub program_address_instruction_map: Vec<Option<Instruction>>,
+	pub debug_symbol_table: HashMap<WordAddress, String>,
 }
 
 impl Program {
 	pub fn new(instructions: &[Instruction]) -> Self {
+		Self::with_debug_symbols(instructions, HashMap::new())
+	}
+
+	pub fn with_debug_symbols(
+		instructions: &[Instruction],
+		debug_symbol_table: HashMap<WordAddress, String>,
+	) -> Self {
 		let mut program_address_instruction_map = Vec::with_capacity(instructions.len());
 		for instruction in instructions {
 			let is_32bit = instruction.is_32bit();
@@ -23,6 +31,7 @@ impl Program {
 
 		Self {
 			program_address_instruction_map,
+			debug_symbol_table,
 		}
 	}
 
@@ -47,6 +56,10 @@ impl Program {
 			program: self,
 			program_address: WordAddress(0),
 		}
+	}
+
+	pub fn get_debug_symbol(&self, address: WordAddress) -> Option<&String> {
+		self.debug_symbol_table.get(&address)
 	}
 }
 

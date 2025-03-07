@@ -239,13 +239,81 @@ pub enum Instruction {
 	Cli,
 }
 
-impl Instruction {
-	pub fn get_referenced_memory_address(&self) -> Option<u32> {
+#[derive(Debug, Clone, Copy)]
+pub enum MemoryAddressRange {
+	SingleByte(u32),
+	// 1 word = 2 bytes
+	SingleWord(u32),
+}
+
+impl MemoryAddressRange {
+	/// Checks if the given address is included in the range.
+	pub fn includes_address(&self, address: u32) -> bool {
 		match self {
-			Self::Sts { address, .. } => Some(address.0 as u32),
-			Self::Lds { address, .. } => Some(address.0 as u32),
-			Self::In { address, .. } => Some(address.0 as u32),
-			Self::Out { address, .. } => Some(address.0 as u32),
+			MemoryAddressRange::SingleByte(address_range) => address == *address_range,
+			MemoryAddressRange::SingleWord(address_range) => {
+				//										- 1, since the stack grows backwards
+				address == *address_range || address == *address_range - 1
+			}
+		}
+	}
+}
+
+impl Instruction {
+	pub fn get_referenced_memory_address_range(
+		&self,
+		stack_pointer: u16,
+	) -> Option<MemoryAddressRange> {
+		match self {
+			Self::Sts { address, .. } => Some(MemoryAddressRange::SingleByte(address.0 as u32)),
+			Self::Lds { address, .. } => Some(MemoryAddressRange::SingleByte(address.0 as u32)),
+			Self::In { address, .. } => Some(MemoryAddressRange::SingleByte(address.0 as u32)),
+			Self::Out { address, .. } => Some(MemoryAddressRange::SingleByte(address.0 as u32)),
+			Self::Push { .. } => Some(MemoryAddressRange::SingleByte(stack_pointer as u32)),
+			Self::Pop { .. } => Some(MemoryAddressRange::SingleByte(stack_pointer as u32 + 1)),
+			Self::Call { .. } => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
+			Self::Ret => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
+			_ => None,
+		}
+	}
+
+	// TODO: add Ret instruction with the return program address inside the stack
+	pub fn get_referenced_program_address(
+		self,
+		program_address_of_instruction: WordAddress,
+		return_address_in_stack: WordAddress,
+		is_currently_executing: bool,
+	) -> Option<WordAddress> {
+		match self {
+			Self::Jmp { word_address } => Some(word_address),
+			Self::Call { word_address } => Some(word_address),
+			Self::Ret => {
+				if is_currently_executing {
+					Some(return_address_in_stack)
+				} else {
+					None
+				}
+			}
+			Self::RJmp { word_offset } => Some(
+				program_address_of_instruction
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1),
+			),
+			Self::Breq { word_offset } => Some(
+				program_address_of_instruction
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1),
+			),
+			Self::Brne { word_offset } => Some(
+				program_address_of_instruction
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1),
+			),
+			Self::Brlt { word_offset } => Some(
+				program_address_of_instruction
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1),
+			),
 			_ => None,
 		}
 	}

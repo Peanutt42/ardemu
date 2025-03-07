@@ -75,6 +75,10 @@ impl Cpu {
 		self.program_counter
 	}
 
+	pub fn get_stack_pointer(&self) -> u16 {
+		self.stack_pointer
+	}
+
 	pub fn get_current_instruction(&self) -> Option<Instruction> {
 		self.program.get(self.program_counter)
 	}
@@ -162,6 +166,13 @@ impl Cpu {
 		let high = self.pop()?;
 		let low = self.pop()?;
 		Ok(u8s_to_u16(low, high).into())
+	}
+	/// returns the return address in the stack that would be popped if the Ret instruction would be executed
+	/// this will return invalid word addresses if the stack does not have a return address to be popped
+	pub fn peek_return_address(&self) -> WordAddress {
+		let high = self.sram[self.stack_pointer as usize + 1];
+		let low = self.sram[self.stack_pointer as usize + 2];
+		u8s_to_u16(low, high).into()
 	}
 
 	pub fn execute(&mut self, instruction: Instruction) -> Result<CpuStatus, CpuError> {
@@ -260,10 +271,10 @@ impl Cpu {
 				self.program_counter += 1;
 			}
 			Instruction::RJmp { word_offset } => {
-				let new_program_counter = (self.program_counter.0 as i32)
-					.wrapping_add(word_offset.0 as i32)
-					.wrapping_add(1);
-				self.program_counter = WordAddress(new_program_counter as u32);
+				self.program_counter = self
+					.program_counter
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1);
 			}
 			Instruction::Push { register } => {
 				self.push(self.read_register(register))?;
@@ -298,37 +309,42 @@ impl Cpu {
 			}
 			Instruction::Cpse { reg_dest, reg_read } => {
 				if self.read_register(reg_dest) == self.read_register(reg_read) {
-					self.program_counter += 2;
+					let next_instruction_word_size =
+						match self.program.get(self.get_program_counter() + 1) {
+							Some(next_instruction) => next_instruction.get_word_size(),
+							None => 1,
+						};
+					self.program_counter += 1 + next_instruction_word_size;
 				} else {
 					self.program_counter += 1;
 				}
 			}
 			Instruction::Breq { word_offset } => {
 				if self.flags.zero() {
-					let new_program_counter = (self.program_counter.0 as i32)
-						.wrapping_add(word_offset.0 as i32)
-						.wrapping_add(1);
-					self.program_counter = WordAddress(new_program_counter as u32);
+					self.program_counter = self
+						.program_counter
+						.wrapping_add_signed(word_offset)
+						.wrapping_add_signed(1);
 				} else {
 					self.program_counter += 1;
 				}
 			}
 			Instruction::Brne { word_offset } => {
 				if !self.flags.zero() {
-					let new_program_counter = (self.program_counter.0 as i32)
-						.wrapping_add(word_offset.0 as i32)
-						.wrapping_add(1);
-					self.program_counter = WordAddress(new_program_counter as u32);
+					self.program_counter = self
+						.program_counter
+						.wrapping_add_signed(word_offset)
+						.wrapping_add_signed(1);
 				} else {
 					self.program_counter += 1;
 				}
 			}
 			Instruction::Brlt { word_offset } => {
 				if self.flags.sign() {
-					let new_program_counter = (self.program_counter.0 as i32)
-						.wrapping_add(word_offset.0 as i32)
-						.wrapping_add(1);
-					self.program_counter = WordAddress(new_program_counter as u32);
+					self.program_counter = self
+						.program_counter
+						.wrapping_add_signed(word_offset)
+						.wrapping_add_signed(1);
 				} else {
 					self.program_counter += 1;
 				}

@@ -253,6 +253,16 @@ impl App {
 
 	fn instructions_pane(&self, cpu: &Cpu) -> Element<Message> {
 		let program_counter = cpu.get_program_counter();
+		let potential_return_address = cpu.peek_return_address();
+
+		let currently_referenced_program_address =
+			cpu.get_current_instruction().and_then(|instruction| {
+				instruction.get_referenced_program_address(
+					program_counter,
+					potential_return_address,
+					true,
+				)
+			});
 
 		column![
 			text("Instructions:"),
@@ -267,12 +277,50 @@ impl App {
 										cpu.get_breakpoints().contains(&program_address);
 									let instr_currently_executing =
 										program_counter == program_address;
+									let debug_symbol =
+										asm_program.get_debug_symbol(program_address);
+									let referenced_debug_symbol = instruction
+										.get_referenced_program_address(
+											program_address,
+											potential_return_address,
+											instr_currently_executing,
+										)
+										.and_then(|referenced_program_address| {
+											let symbol = asm_program
+												.get_debug_symbol(referenced_program_address)?;
+
+											Some(format!("{referenced_program_address}: {symbol}"))
+										});
+									let debug_info = match (debug_symbol, referenced_debug_symbol) {
+										(Some(debug_symbol), Some(referenced_debug_symbol)) => {
+											format!(" ; {debug_symbol}, {referenced_debug_symbol}")
+										}
+										(Some(debug_symbol), None) => {
+											format!(" ; {debug_symbol}")
+										}
+										(None, Some(referenced_debug_symbol)) => {
+											format!(" ; {referenced_debug_symbol}")
+										}
+										(None, None) => String::new(),
+									};
+									let is_currently_referenced =
+										match currently_referenced_program_address {
+											Some(currently_referenced_program_address) => {
+												currently_referenced_program_address
+													== program_address
+											}
+											None => false,
+										};
 
 									row![
 										button(
 											text!("{program_address}:")
 												.font(Font::MONOSPACE)
-												.style(secondary_text_style)
+												.style(if is_currently_referenced {
+													primary_text_style
+												} else {
+													secondary_text_style
+												})
 										)
 										.style(move |t, s| {
 											if breakpoint_set_here {
@@ -293,13 +341,13 @@ impl App {
 												Message::AddBreakpoint(program_address)
 											}
 										),
-										text!("{instruction}").font(Font::MONOSPACE).color_maybe(
-											if instr_currently_executing {
+										text!("{instruction}{debug_info}")
+											.font(Font::MONOSPACE)
+											.color_maybe(if instr_currently_executing {
 												Some(Color::from_rgb(1.0, 0.0, 0.0))
 											} else {
 												None
-											}
-										)
+											})
 									]
 									.align_y(Vertical::Center)
 									.spacing(15)
@@ -401,8 +449,10 @@ impl App {
 	const DATA_COLUMN_SPACING: f32 = 5.0;
 	const BYTES_PER_ROW: u32 = 16;
 	fn memory_pane<'a>(&'a self, cpu: &'a Cpu, portrait: bool) -> Element<'a, Message> {
-		let referenced_memory_address = match cpu.get_current_instruction() {
-			Some(instruction) => instruction.get_referenced_memory_address(),
+		let referenced_memory_address_range = match cpu.get_current_instruction() {
+			Some(instruction) => {
+				instruction.get_referenced_memory_address_range(cpu.get_stack_pointer())
+			}
 			None => None,
 		};
 
@@ -480,12 +530,14 @@ impl App {
 											(0..Self::BYTES_PER_ROW).map(|byte_index| {
 												let memory_address = start_address + byte_index;
 
-												let referenced = match referenced_memory_address {
-													Some(referenced_memory_address) => {
-														memory_address == referenced_memory_address
-													}
-													None => false,
-												};
+												let referenced =
+													match &referenced_memory_address_range {
+														Some(referenced_memory_address_range) => {
+															referenced_memory_address_range
+																.includes_address(memory_address)
+														}
+														None => false,
+													};
 
 												match data.get(byte_index as usize) {
 													Some(byte_value) => text!("{byte_value:2x}")

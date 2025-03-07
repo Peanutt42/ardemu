@@ -104,6 +104,11 @@ impl AddAssign<i32> for WordAddress {
 		*self = Self(self.0.saturating_add_signed(rhs));
 	}
 }
+impl WordAddress {
+	pub fn wrapping_add_signed(&self, rhs: impl Into<i32>) -> Self {
+		Self(self.0.wrapping_add_signed(rhs.into()))
+	}
+}
 impl std::fmt::Display for WordAddress {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		//					address is displayed in bytes, 1 word = 2 bytes
@@ -125,6 +130,11 @@ impl From<i16> for WordOffset16 {
 		Self(value)
 	}
 }
+impl From<WordOffset16> for i32 {
+	fn from(value: WordOffset16) -> i32 {
+		value.0 as i32
+	}
+}
 impl std::fmt::Display for WordOffset16 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		//					offset is displayed in bytes, 1 word = 2 bytes
@@ -144,6 +154,11 @@ pub struct WordOffset8(pub i8);
 impl From<i8> for WordOffset8 {
 	fn from(value: i8) -> Self {
 		Self(value)
+	}
+}
+impl From<WordOffset8> for i32 {
+	fn from(value: WordOffset8) -> i32 {
+		value.0 as i32
 	}
 }
 impl std::fmt::Display for WordOffset8 {
