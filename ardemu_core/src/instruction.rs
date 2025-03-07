@@ -277,7 +277,6 @@ impl Instruction {
 		}
 	}
 
-	// TODO: add Ret instruction with the return program address inside the stack
 	pub fn get_referenced_program_address(
 		self,
 		program_address_of_instruction: WordAddress,
