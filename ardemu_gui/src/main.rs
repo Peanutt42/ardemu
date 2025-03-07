@@ -341,13 +341,18 @@ impl App {
 												Message::AddBreakpoint(program_address)
 											}
 										),
-										text!("{instruction}{debug_info}")
-											.font(Font::MONOSPACE)
-											.color_maybe(if instr_currently_executing {
-												Some(Color::from_rgb(1.0, 0.0, 0.0))
-											} else {
-												None
-											})
+										row![
+											text!("{instruction}")
+												.font(Font::MONOSPACE)
+												.color_maybe(if instr_currently_executing {
+													Some(Color::from_rgb(1.0, 0.0, 0.0))
+												} else {
+													None
+												}),
+											text(debug_info)
+												.font(Font::MONOSPACE)
+												.style(secondary_text_style)
+										]
 									]
 									.align_y(Vertical::Center)
 									.spacing(15)
