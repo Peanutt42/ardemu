@@ -1,5 +1,8 @@
 # ardemu
 
+Try it out in the browser! (limited gui)
+[peanutt42.github.io/ardemu_web](https://peanutt42.github.io/ardemu_web)
+
 ![ardemu_gui](ardemu_gui/Screenshot.png)
 
 ## Sample: Fibonacci Sequence
