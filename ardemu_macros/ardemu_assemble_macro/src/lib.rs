@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use ardemu_core::{Program, WordAddress};
 use proc_macro::TokenStream;
@@ -70,9 +70,10 @@ pub fn assemble(input: TokenStream) -> TokenStream {
 pub fn include_asm(input: TokenStream) -> TokenStream {
 	let asm_filepath = parse_macro_input!(input as LitStr).value();
 
-	let current_dir = std::env::current_dir().unwrap();
+	let manifest_dir =
+		std::env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
 
-	let asm_filepath = current_dir.join(asm_filepath);
+	let asm_filepath = Path::new(&manifest_dir).join(asm_filepath);
 	let asm_filepath_str = asm_filepath.to_str().unwrap();
 
 	let expanded = match std::fs::read_to_string(&asm_filepath) {

@@ -13,7 +13,7 @@ pub enum CpuError {
 	StackUnderflow,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AsmParseError {
 	error: AsmParseErrorType,
 	line_number: usize,
@@ -23,7 +23,7 @@ impl AsmParseError {
 		Self { error, line_number }
 	}
 }
-impl std::fmt::Debug for AsmParseError {
+impl std::fmt::Display for AsmParseError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{} on line {}", self.error, self.line_number)
 	}

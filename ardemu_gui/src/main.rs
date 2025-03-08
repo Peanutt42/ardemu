@@ -12,17 +12,22 @@ use ardemu_core::{
 use iced::{
 	alignment::Vertical,
 	border::rounded,
+	keyboard,
 	mouse::ScrollDelta,
 	widget::{
-		button, column, container, mouse_area, pick_list, responsive, row, scrollable, text,
-		text_editor, text_editor::Content, text_input, Column, Row, Space,
+		button, checkbox, column, container, mouse_area, pick_list, responsive, row, scrollable,
+		scrollable::Direction, text, text_editor, text_editor::Content, text_input, Column, Row,
+		Space,
 	},
 	window, Color, Element, Font,
 	Length::{Fill, FillPortion},
-	Padding, Subscription, Theme,
+	Padding, Subscription, Task, Theme,
 };
 use std::{
-	sync::mpsc::{Receiver, TryRecvError},
+	sync::{
+		mpsc::{Receiver, TryRecvError},
+		LazyLock,
+	},
 	time::Instant,
 };
 
@@ -38,6 +43,10 @@ use style::{
 
 mod code_editor;
 use code_editor::{code_editor_keybindings, unindent_text};
+
+static INSTRUCTION_SCROLLABLE_ID: LazyLock<scrollable::Id> = LazyLock::new(scrollable::Id::unique);
+const INSTRUCTION_SCROLLABLE_PADDING: f32 = 10.0;
+const INSTRUCTION_HEIGHT: f32 = 25.0;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum CodeSample {
@@ -123,6 +132,7 @@ struct App {
 	cpu_sim: triple_buffer::Output<CpuSim>,
 	cpu_sim_message_sender: std::sync::mpsc::Sender<CpuSimMessage>,
 	cpu_sim_dirty: bool,
+	stick_to_current_instruction: bool,
 	memory_view_start_address: u32,
 	memory_view_start_address_input: Option<String>,
 	asm_source_code_text_content: text_editor::Content,
@@ -148,6 +158,7 @@ impl Default for App {
 			cpu_sim: readable_cpu_sim,
 			cpu_sim_message_sender: sender,
 			cpu_sim_dirty: false,
+			stick_to_current_instruction: false,
 			memory_view_start_address: 0,
 			memory_view_start_address_input: None,
 			asm_source_code_text_content: text_editor::Content::with_text(
@@ -162,8 +173,10 @@ impl Default for App {
 enum Message {
 	ResetCpu,
 	SimulateCpu(bool),
+	ToggleSimulateCpu,
 	Step,
 	Skip,
+	SetStickToCurrentInstruction(bool),
 	AsmSourceCodeChanged(text_editor::Action),
 	AsmSourceCodeUnindent,
 	LoadAsmCodeSample(CodeSample),
@@ -181,7 +194,7 @@ impl App {
 	}
 
 	fn subscription(&self) -> Subscription<Message> {
-		match &self.asm_program {
+		let update_cpu_sim_subscription = match &self.asm_program {
 			Ok(_) if self.simulate_cpu => window::frames().map(|_| Message::UpdateCpuState),
 			_ => {
 				if self.cpu_sim_dirty {
@@ -190,69 +203,106 @@ impl App {
 					Subscription::none()
 				}
 			}
-		}
+		};
+
+		let keyboard_shortcuts = keyboard::on_key_press(move |key, _modifiers| match key {
+			keyboard::Key::Named(keyboard::key::Named::F5) => Some(Message::ToggleSimulateCpu),
+			keyboard::Key::Named(keyboard::key::Named::F6) => Some(Message::Step),
+			keyboard::Key::Named(keyboard::key::Named::F7) => Some(Message::Skip),
+			keyboard::Key::Named(keyboard::key::Named::F8) => Some(Message::ResetCpu),
+			_ => None,
+		});
+
+		Subscription::batch([update_cpu_sim_subscription, keyboard_shortcuts])
 	}
 
 	fn theme(&self) -> Theme {
 		Theme::Dark
 	}
 
-	fn send_cpu_sim_message(&mut self, message: CpuSimMessage) {
+	fn send_cpu_sim_message(&mut self, message: CpuSimMessage) -> Task<Message> {
 		if let Err(e) = self.cpu_sim_message_sender.send(message) {
 			eprintln!("Could not send CPU sim message: {e}");
 		};
 		self.cpu_sim_dirty = true;
+		if self.stick_to_current_instruction {
+			self.stick_to_current_instruction()
+		} else {
+			Task::none()
+		}
 	}
 
-	fn update(&mut self, message: Message) {
+	fn stick_to_current_instruction(&mut self) -> Task<Message> {
+		let program_counter = self.cpu_sim.read().cpu.get_program_counter();
+		scrollable::scroll_to(
+			INSTRUCTION_SCROLLABLE_ID.clone(),
+			scrollable::AbsoluteOffset {
+				x: 0.0,
+				y: INSTRUCTION_SCROLLABLE_PADDING + INSTRUCTION_HEIGHT * program_counter.0 as f32,
+			},
+		)
+	}
+
+	fn update(&mut self, message: Message) -> Task<Message> {
 		match message {
 			Message::SimulateCpu(simulate_cpu) => {
 				self.simulate_cpu = simulate_cpu;
-				self.send_cpu_sim_message(CpuSimMessage::SetSimulating(simulate_cpu));
+				self.send_cpu_sim_message(CpuSimMessage::SetSimulating(simulate_cpu))
 			}
-			Message::ResetCpu => {
-				self.send_cpu_sim_message(CpuSimMessage::ResetAndLoadProgram(
-					self.asm_program.clone().ok().unwrap_or_default(),
-				));
-			}
+			Message::ToggleSimulateCpu => self.update(Message::SimulateCpu(!self.simulate_cpu)),
+			Message::ResetCpu => self.send_cpu_sim_message(CpuSimMessage::ResetAndLoadProgram(
+				self.asm_program.clone().ok().unwrap_or_default(),
+			)),
 			Message::Step => self.send_cpu_sim_message(CpuSimMessage::Step),
 			Message::Skip => self.send_cpu_sim_message(CpuSimMessage::Skip),
+			Message::SetStickToCurrentInstruction(stick) => {
+				self.stick_to_current_instruction = stick;
+				Task::none()
+			}
 			Message::AsmSourceCodeChanged(action) => {
 				let is_edit = action.is_edit();
 				self.asm_source_code_text_content.perform(action);
 				if is_edit {
 					self.asm_program = assemble(&self.asm_source_code_text_content.text());
-					self.update(Message::ResetCpu);
+					self.update(Message::ResetCpu)
+				} else {
+					Task::none()
 				}
 			}
 			Message::AsmSourceCodeUnindent => {
 				unindent_text(&mut self.asm_source_code_text_content);
 				self.asm_program = assemble(&self.asm_source_code_text_content.text());
-				self.update(Message::ResetCpu);
+				self.update(Message::ResetCpu)
 			}
 			Message::LoadAsmCodeSample(code_sample) => {
 				self.asm_source_code_text_content =
 					Content::with_text(&code_sample.get_source_code());
 				self.asm_program = Ok(code_sample.get_program());
-				self.update(Message::ResetCpu);
+				self.update(Message::ResetCpu)
 			}
 			Message::UpdateCpuState => {
 				if self.cpu_sim.update() {
 					self.cpu_sim_dirty = false;
+					if self.stick_to_current_instruction {
+						return self.stick_to_current_instruction();
+					}
 				}
+				Task::none()
 			}
 			Message::AddBreakpoint(address) => {
-				self.send_cpu_sim_message(CpuSimMessage::AddBreakpoint(address));
+				self.send_cpu_sim_message(CpuSimMessage::AddBreakpoint(address))
 			}
 			Message::RemoveBreakpoint(address) => {
-				self.send_cpu_sim_message(CpuSimMessage::RemoveBreakpoint(address));
+				self.send_cpu_sim_message(CpuSimMessage::RemoveBreakpoint(address))
 			}
 			Message::ChangeMemoryViewStartAddressInput(new_input) => {
 				self.memory_view_start_address_input = Some(new_input);
+				Task::none()
 			}
 			Message::ChangeMemoryViewStartAddress(address) => {
 				self.memory_view_start_address =
 					(address / Self::BYTES_PER_ROW) * Self::BYTES_PER_ROW;
+				Task::none()
 			}
 			Message::ChangeMemoryViewStartAddressFromInput => {
 				if let Some(new_address) =
@@ -265,7 +315,9 @@ impl App {
 								input.parse::<u32>().ok()
 							}
 						}) {
-					self.update(Message::ChangeMemoryViewStartAddress(new_address));
+					self.update(Message::ChangeMemoryViewStartAddress(new_address))
+				} else {
+					Task::none()
 				}
 			}
 		}
@@ -274,14 +326,14 @@ impl App {
 	fn view(&self) -> Element<Message> {
 		container(responsive(|size| {
 			if size.width > size.height {
-				row![self.editor_pane(false), self.simulation_pane(false),]
+				row![self.editor_pane(), self.simulation_pane(false),]
 					.spacing(20)
 					.padding(10)
 					.width(Fill)
 					.height(Fill)
 					.into()
 			} else {
-				column![self.editor_pane(true), self.simulation_pane(true),]
+				column![self.editor_pane(), self.simulation_pane(true),]
 					.spacing(20)
 					.padding(10)
 					.width(Fill)
@@ -295,9 +347,21 @@ impl App {
 		.into()
 	}
 
-	fn editor_pane(&self, portrait: bool) -> Element<Message> {
+	fn editor_pane(&self) -> Element<Message> {
 		column![
-			text("Assembly Editor:"),
+			row![
+				text("Assembly Editor:"),
+				Space::new(Fill, 0.0),
+				pick_list(
+					CodeSample::ALL,
+					None::<CodeSample>,
+					Message::LoadAsmCodeSample
+				)
+				.placeholder("Load Code Sample")
+				.style(pick_list_style)
+				.menu_style(pick_list_menu_style),
+			]
+			.align_y(Vertical::Center),
 			container(scrollable(
 				text_editor(&self.asm_source_code_text_content)
 					.highlight_with::<highlighter::Highlighter>(
@@ -313,13 +377,14 @@ impl App {
 					)),
 			))
 			.style(panel_style)
-			.width(if portrait { Fill } else { FillPortion(2) })
-			.height(if portrait { FillPortion(2) } else { Fill }),
+			.width(Fill)
+			.height(Fill),
 		]
 		.into()
 	}
 
-	fn instructions_pane(&self, cpu: &Cpu) -> Element<Message> {
+	fn instructions_pane(&self, cpu_sim: &CpuSim) -> Element<Message> {
+		let cpu = &cpu_sim.cpu;
 		let program_counter = cpu.get_program_counter();
 		let potential_return_address = cpu.peek_return_address();
 
@@ -333,7 +398,13 @@ impl App {
 			});
 
 		column![
-			text("Instructions:"),
+			row![
+				text("Instructions:"),
+				Space::new(Fill, 0.0),
+				checkbox("Stick", self.stick_to_current_instruction)
+					.on_toggle(Message::SetStickToCurrentInstruction)
+			]
+			.align_y(Vertical::Center),
 			container(match &self.asm_program {
 				Ok(asm_program) => {
 					scrollable(
@@ -423,18 +494,29 @@ impl App {
 										]
 									]
 									.align_y(Vertical::Center)
-									.spacing(15)
+									.height(INSTRUCTION_HEIGHT)
 									.into()
 								})
 								.collect::<Vec<_>>(),
 						)
-						.spacing(5)
-						.padding(10)
-						.width(Fill),
+						.padding(INSTRUCTION_SCROLLABLE_PADDING),
 					)
+					.id(INSTRUCTION_SCROLLABLE_ID.clone())
+					.direction(Direction::Both {
+						vertical: scrollable::Scrollbar::default(),
+						horizontal: scrollable::Scrollbar::default(),
+					})
+					.width(Fill)
 					.into()
 				}
-				Err(e) => Element::new(container(text!("Error: {e:?}").width(Fill)).padding(10)),
+				Err(e) => Element::new(
+					container(
+						text!("Error: {e}")
+							.width(Fill)
+							.color(Color::from_rgb(1.0, 0.0, 0.0))
+					)
+					.padding(10)
+				),
 			})
 			.style(panel_style),
 		]
@@ -467,6 +549,7 @@ impl App {
 						),
 						text!("{value}").font(Font::MONOSPACE)
 					]
+					.align_y(Vertical::Center)
 					.into()
 				}))
 				.spacing(10)
@@ -683,7 +766,7 @@ impl App {
 		let cpu_sim = self.cpu_sim.peek_output_buffer();
 		let cpu = &cpu_sim.cpu;
 
-		let instruction_pane = self.instructions_pane(cpu);
+		let instruction_pane = self.instructions_pane(cpu_sim);
 		let register_pane = self.registers_pane(cpu);
 		let flags_pane = self.flags_pane(cpu);
 		let memory_pane = self.memory_pane(cpu, portrait);
@@ -695,10 +778,10 @@ impl App {
 				.into()
 		} else {
 			column![
-				row![instruction_pane, register_pane, flags_pane]
+				container(instruction_pane).height(Fill),
+				row![register_pane, flags_pane, memory_pane]
 					.spacing(20)
 					.height(Fill),
-				container(memory_pane).height(Fill),
 			]
 			.spacing(20)
 			.height(FillPortion(1))
@@ -707,21 +790,17 @@ impl App {
 
 		column![
 			row![
-				button("Reset CPU")
+				button("Reset")
 					.style(button_style)
 					.on_press(Message::ResetCpu),
-				button(if self.simulate_cpu {
-					"Stop CPU"
-				} else {
-					"Start CPU"
-				})
-				.style(button_style)
-				.on_press(Message::SimulateCpu(!self.simulate_cpu)),
+				button(if self.simulate_cpu { "Stop" } else { "Start" })
+					.style(button_style)
+					.on_press(Message::SimulateCpu(!self.simulate_cpu)),
 				button("Step").style(button_style).on_press(Message::Step),
 				button("Skip").style(button_style).on_press(Message::Skip),
 				container(
 					text!(
-						"Instructions/sec = {}",
+						"Instructions/s = {}",
 						format_big_number(cpu_sim.instr_per_second)
 					)
 					.font(Font::MONOSPACE)
@@ -732,15 +811,6 @@ impl App {
 					border: rounded(8),
 					..Default::default()
 				}),
-				Space::new(Fill, 0.0),
-				pick_list(
-					CodeSample::ALL,
-					None::<CodeSample>,
-					Message::LoadAsmCodeSample
-				)
-				.placeholder("Load Code Sample")
-				.style(pick_list_style)
-				.menu_style(pick_list_menu_style),
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),
@@ -783,13 +853,12 @@ fn cpu_simulation_thread(
 				}
 			}
 			instructions_processed += BULK_STEP_COUNT;
+			writable_cpu_sim.write(CpuSim {
+				cpu: cpu.clone(),
+				instr_per_second: (instructions_processed as f64 / start.elapsed().as_secs_f64())
+					as usize,
+			});
 		}
-
-		writable_cpu_sim.write(CpuSim {
-			cpu: cpu.clone(),
-			instr_per_second: (instructions_processed as f64 / start.elapsed().as_secs_f64())
-				as usize,
-		});
 
 		loop {
 			let simulate_cpu_copy = simulate_cpu;

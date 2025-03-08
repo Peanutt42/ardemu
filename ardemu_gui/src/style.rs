@@ -89,17 +89,15 @@ pub fn background_style(_theme: &Theme) -> container::Style {
 	}
 }
 
-/// formats 1000000 into "1.000.000"
-#[allow(clippy::unwrap_used)] // string -> int parsing with string already generated from valid number
+/// formats 1000000 into "1M"
 pub fn format_big_number(n: usize) -> String {
-	n.to_string()
-		.as_bytes()
-		.rchunks(3)
-		.rev()
-		.map(std::str::from_utf8)
-		.collect::<Result<Vec<&str>, _>>()
-		.unwrap()
-		.join(",")
+	if n < 1_000 {
+		n.to_string()
+	} else if n < 100_000 {
+		format!("{:.1}K", n as f32 / 1_000.0)
+	} else {
+		format!("{:.1}M", n as f32 / 1_000_000.0)
+	}
 }
 
 /// sets text color to primary theme color
