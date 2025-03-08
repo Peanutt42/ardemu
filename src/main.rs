@@ -5,7 +5,7 @@ use ardemu_core::{
 };
 
 fn main() {
-	let mut cpu = Cpu::new(include_asm!("src/fib.asm"));
+	let mut cpu = Cpu::new(include_asm!("sample_programs/fib.asm"));
 
 	let n = 10;
 

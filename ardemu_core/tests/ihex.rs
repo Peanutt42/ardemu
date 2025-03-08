@@ -6,7 +6,7 @@ use ardemu_core::{
 
 #[test]
 fn load_fib_avr_rust_sample_hex_file() {
-	match load_ihex_str(include_str!("fib_avr_rust_sample/fib_avr_rust_sample.hex")) {
+	match load_ihex_str(include_str!("../../sample_programs/rust_fib.hex")) {
 		Ok(program) => {
 			let expected_instructions = // see fib_avr_rust_sample/fib_avr_rust_sample.asm for reference
 			[

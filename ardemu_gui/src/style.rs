@@ -1,6 +1,7 @@
 use iced::{
 	border::rounded,
-	widget::{button, container, text, text_editor},
+	overlay::menu,
+	widget::{button, container, pick_list, text, text_editor},
 	Border, Color, Theme,
 };
 
@@ -112,5 +113,32 @@ pub fn primary_text_style(theme: &Theme) -> text::Style {
 pub fn secondary_text_style(_theme: &Theme) -> text::Style {
 	text::Style {
 		color: Some(Color::from_rgb(0.8, 0.8, 0.8)),
+	}
+}
+
+pub fn pick_list_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
+	let color_pair = match status {
+		pick_list::Status::Active | pick_list::Status::Hovered => {
+			theme.extended_palette().background.weak
+		}
+		pick_list::Status::Opened => theme.extended_palette().background.strong,
+	};
+
+	pick_list::Style {
+		text_color: color_pair.text,
+		placeholder_color: color_pair.text,
+		border: rounded(8.0),
+		handle_color: color_pair.text,
+		background: color_pair.color.into(),
+	}
+}
+
+pub fn pick_list_menu_style(theme: &Theme) -> menu::Style {
+	menu::Style {
+		border: rounded(8.0),
+		background: theme.extended_palette().background.base.color.into(),
+		text_color: theme.extended_palette().background.base.text,
+		selected_text_color: theme.extended_palette().primary.strong.text,
+		selected_background: theme.extended_palette().primary.strong.color.into(),
 	}
 }

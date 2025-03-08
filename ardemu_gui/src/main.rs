@@ -5,7 +5,7 @@
 #![deny(unsafe_code)]
 
 use ardemu_core::{
-	assemble, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Program,
+	assemble, load_ihex_str, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Program,
 	Register::{self, R9},
 	WordAddress,
 };
@@ -14,8 +14,8 @@ use iced::{
 	border::rounded,
 	mouse::ScrollDelta,
 	widget::{
-		button, column, container, mouse_area, responsive, row, scrollable, text, text_editor,
-		text_input, Column, Row,
+		button, column, container, mouse_area, pick_list, responsive, row, scrollable, text,
+		text_editor, text_editor::Content, text_input, Column, Row, Space,
 	},
 	window, Color, Element, Font,
 	Length::{Fill, FillPortion},
@@ -32,11 +32,73 @@ mod highlighter;
 mod style;
 use style::{
 	background_style, button_style, format_big_number, hidden_secondary_button_style, panel_style,
-	primary_text_style, secondary_text_style, text_editor_style,
+	pick_list_menu_style, pick_list_style, primary_text_style, secondary_text_style,
+	text_editor_style,
 };
 
 mod code_editor;
 use code_editor::{code_editor_keybindings, unindent_text};
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum CodeSample {
+	#[default]
+	Fib8,
+	Fib16,
+	RecursiveFib,
+	RustFib,
+}
+impl CodeSample {
+	const ALL: &'static [CodeSample] = &[
+		CodeSample::Fib8,
+		CodeSample::Fib16,
+		CodeSample::RecursiveFib,
+		CodeSample::RustFib,
+	];
+
+	fn get_source_code(&self) -> String {
+		match self {
+			Self::Fib8 => format!(
+				"ldi r16, 10 ; n = 10\n\n{}",
+				include_str!("../../sample_programs/fib.asm")
+			),
+			Self::Fib16 => format!(
+				"ldi r16, 10 ; n = 10\n\n{}",
+				include_str!("../../sample_programs/fib16.asm")
+			),
+			Self::RecursiveFib => format!(
+				"ldi r16, 10 ; n = 10\n\n{}",
+				include_str!("../../sample_programs/recursive_fib.asm")
+			),
+			Self::RustFib => {
+				include_str!("../../sample_programs/rust_fib_disassembled.asm").to_string()
+			}
+		}
+	}
+
+	#[allow(clippy::unwrap_used)]
+	fn get_program(&self) -> Program {
+		match self {
+			Self::RustFib => {
+				load_ihex_str(include_str!("../../sample_programs/rust_fib.hex")).unwrap()
+			}
+			_ => assemble(&self.get_source_code()).unwrap(),
+		}
+	}
+}
+impl std::fmt::Display for CodeSample {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}",
+			match self {
+				Self::Fib8 => "Fib 8-bit",
+				Self::Fib16 => "Fib 16-bit",
+				Self::RecursiveFib => "Recursive Fib",
+				Self::RustFib => "Rust Fib",
+			}
+		)
+	}
+}
 
 #[derive(Debug, Clone)]
 struct CpuSim {
@@ -69,12 +131,9 @@ struct App {
 
 impl Default for App {
 	fn default() -> Self {
-		let asm_source_code = include_str!("fib16.asm").to_string();
-		let asm_output = assemble(&asm_source_code);
-		let cpu = match asm_output.as_ref() {
-			Ok(program) => Cpu::new(program.clone()),
-			Err(_) => Cpu::default(),
-		};
+		let code_sample = CodeSample::default();
+		let asm_program = code_sample.get_program();
+		let cpu = Cpu::new(asm_program.clone());
 		let cpu_sim = CpuSim {
 			cpu: cpu.clone(),
 			instr_per_second: 0,
@@ -91,8 +150,10 @@ impl Default for App {
 			cpu_sim_dirty: false,
 			memory_view_start_address: 0,
 			memory_view_start_address_input: None,
-			asm_source_code_text_content: text_editor::Content::with_text(&asm_source_code),
-			asm_program: asm_output,
+			asm_source_code_text_content: text_editor::Content::with_text(
+				&code_sample.get_source_code(),
+			),
+			asm_program: Ok(asm_program),
 		}
 	}
 }
@@ -105,6 +166,7 @@ enum Message {
 	Skip,
 	AsmSourceCodeChanged(text_editor::Action),
 	AsmSourceCodeUnindent,
+	LoadAsmCodeSample(CodeSample),
 	UpdateCpuState,
 	AddBreakpoint(WordAddress),
 	RemoveBreakpoint(WordAddress),
@@ -166,6 +228,12 @@ impl App {
 			Message::AsmSourceCodeUnindent => {
 				unindent_text(&mut self.asm_source_code_text_content);
 				self.asm_program = assemble(&self.asm_source_code_text_content.text());
+				self.update(Message::ResetCpu);
+			}
+			Message::LoadAsmCodeSample(code_sample) => {
+				self.asm_source_code_text_content =
+					Content::with_text(&code_sample.get_source_code());
+				self.asm_program = Ok(code_sample.get_program());
 				self.update(Message::ResetCpu);
 			}
 			Message::UpdateCpuState => {
@@ -663,7 +731,16 @@ impl App {
 					background: Some(t.extended_palette().background.weak.color.into()),
 					border: rounded(8),
 					..Default::default()
-				})
+				}),
+				Space::new(Fill, 0.0),
+				pick_list(
+					CodeSample::ALL,
+					None::<CodeSample>,
+					Message::LoadAsmCodeSample
+				)
+				.placeholder("Load Code Sample")
+				.style(pick_list_style)
+				.menu_style(pick_list_menu_style),
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),
