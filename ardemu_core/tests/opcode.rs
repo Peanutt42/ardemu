@@ -7,8 +7,9 @@ use ardemu_core::{
 #[test]
 fn test_load_instructions_from_opcodes() {
 	fn test_16bit(opcode_16bit: u16, expected_instruction: Instruction) {
-		let instruction =
-			Instruction::load((opcode_16bit as u32) << 16).expect("failed to load opcode");
+		let instruction = Instruction::load((opcode_16bit as u32) << 16).unwrap_or_else(|| {
+			panic!("failed to load instruction {expected_instruction} from opcode {opcode_16bit:#018b}")
+		});
 
 		assert_eq!(
 			instruction, expected_instruction,
@@ -17,7 +18,9 @@ fn test_load_instructions_from_opcodes() {
 	}
 
 	fn test_32bit(opcode_32bit: u32, expected_instruction: Instruction) {
-		let instruction = Instruction::load(opcode_32bit).expect("failed to load opcode");
+		let instruction = Instruction::load(opcode_32bit).unwrap_or_else(|| {
+			panic!("failed to load instruction {expected_instruction} from opcode {opcode_32bit:#034b}")
+		});
 
 		assert_eq!(
 			instruction, expected_instruction,
@@ -195,8 +198,14 @@ fn test_load_instructions_from_opcodes() {
 		},
 	);
 	test_16bit(
-		0b1111_0110_0000_1100,
-		Instruction::Brne {
+		0b1111_0010_0000_1000,
+		Instruction::Brcs {
+			word_offset: WordOffset8(-63),
+		},
+	);
+	test_16bit(
+		0b1111_0110_0000_1000,
+		Instruction::Brcc {
 			word_offset: WordOffset8(-63),
 		},
 	);

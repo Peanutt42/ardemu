@@ -134,6 +134,16 @@ pub enum Instruction {
 	/// offset is technically a 7 bit offset value
 	#[skip_parse_asm_instruction]
 	Brlt { word_offset: WordOffset8 },
+	/// branch if carry flag is set (C flag is 1)
+	/// PC = PC + offset + 1 (+1 because of the instruction itself)
+	/// offset is technically a 7 bit offset value
+	#[skip_parse_asm_instruction]
+	Brcs { word_offset: WordOffset8 },
+	/// branch if carry flag is cleared (C flag is 0)
+	/// PC = PC + offset + 1 (+1 because of the instruction itself)
+	/// offset is technically a 7 bit offset value
+	#[skip_parse_asm_instruction]
+	Brcc { word_offset: WordOffset8 },
 	/// call subroutine at address:
 	/// ; PC + 2: return address: this instruction itself + next instruction as return address
 	/// push (PC + 1) onto stack
@@ -309,6 +319,16 @@ impl Instruction {
 					.wrapping_add_signed(1),
 			),
 			Self::Brlt { word_offset } => Some(
+				program_address_of_instruction
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1),
+			),
+			Self::Brcs { word_offset } => Some(
+				program_address_of_instruction
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1),
+			),
+			Self::Brcc { word_offset } => Some(
 				program_address_of_instruction
 					.wrapping_add_signed(word_offset)
 					.wrapping_add_signed(1),

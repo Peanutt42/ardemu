@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Instruction, Opcode, WordAddress};
+use crate::{Instruction, LoadProgramError, Opcode, WordAddress};
 
 /// Stores map of program address in words and instructions
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,6 +33,43 @@ impl Program {
 			program_address_instruction_map,
 			debug_symbol_table,
 		}
+	}
+
+	pub fn load_instructions(code: &[u8]) -> Result<Vec<Instruction>, LoadProgramError> {
+		if code.len() % 2 != 0 {
+			return Err(LoadProgramError::InvalidAlignment);
+		}
+
+		let mut program_address = 0;
+		let mut instructions = Vec::new();
+		while program_address + std::mem::size_of::<u16>() <= code.len() {
+			let first_opcode_16bit =
+				u16::from_le_bytes([code[program_address], code[program_address + 1]]);
+
+			let opcode_32bit = if code.len() > program_address + std::mem::size_of::<u32>() {
+				let second_opcode_16bit =
+					u16::from_le_bytes([code[program_address + 2], code[program_address + 3]]);
+
+				((first_opcode_16bit as u32) << 16) | (second_opcode_16bit as u32)
+			} else {
+				(first_opcode_16bit as u32) << 16
+			};
+
+			match Instruction::load(opcode_32bit) {
+				Some(instruction) => {
+					program_address += instruction.get_byte_size() as usize;
+					instructions.push(instruction);
+				}
+				None => {
+					return Err(LoadProgramError::UnsupportedInstruction {
+						opcode_32bit,
+						program_address: program_address as u16,
+					})
+				}
+			}
+		}
+
+		Ok(instructions)
 	}
 
 	pub fn len(&self) -> usize {

@@ -10,6 +10,7 @@ members = [
 	"ardemu_web",
 	"ardemu_macros/ardemu_assemble_macro",
 	"ardemu_macros/ardemu_instruction_helper_macro",
+	"sample_programs/rust_fib",
 ]
 
 [workspace.dependencies]

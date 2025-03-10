@@ -1,12 +1,12 @@
 use ardemu_core::{
-	load_ihex_str, Instruction, Program,
+	load_elf, Instruction, Program,
 	Register::{R1, R16, R17, R22, R23, R24, R28, R29},
 	UpperRegister, WordAddress, WordOffset16, WordOffset8,
 };
 
 #[test]
-fn load_fib_avr_rust_sample_hex_file() {
-	match load_ihex_str(include_str!("../../sample_programs/rust_fib.hex")) {
+fn test_load_elf_file() {
+	match load_elf(include_bytes!("../../sample_programs/rust_fib.elf")) {
 		Ok(program) => {
 			let expected_instructions = // see fib_avr_rust_sample/fib_avr_rust_sample.asm for reference
 			[
@@ -108,7 +108,29 @@ fn load_fib_avr_rust_sample_hex_file() {
 					expected_program.get(program_address)
 				);
 			}
+			assert_eq!(
+				program.get_debug_symbol(WordAddress(0)).unwrap(),
+				"__vectors"
+			);
+			assert_eq!(
+				program.get_debug_symbol(WordAddress(52)).unwrap(),
+				"__ctors_end"
+			);
+			assert_eq!(
+				program.get_debug_symbol(WordAddress(62)).unwrap(),
+				"__bad_interrupt"
+			);
+			assert_eq!(
+				program.get_debug_symbol(WordAddress(64)).unwrap(),
+				"_ZN8rust_fib3fib17h52828e8768a34918E"
+			);
+			assert_eq!(program.get_debug_symbol(WordAddress(83)).unwrap(), "main");
+			assert_eq!(program.get_debug_symbol(WordAddress(91)).unwrap(), "_exit");
+			assert_eq!(
+				program.get_debug_symbol(WordAddress(92)).unwrap(),
+				"__stop_program"
+			);
 		}
-		Err(e) => panic!("Error loading ihex: {e}"),
+		Err(e) => panic!("Error loading rust_fib.elf: {e}"),
 	}
 }

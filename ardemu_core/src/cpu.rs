@@ -349,6 +349,26 @@ impl Cpu {
 					self.program_counter += 1;
 				}
 			}
+			Instruction::Brcs { word_offset } => {
+				if self.flags.carry() {
+					self.program_counter = self
+						.program_counter
+						.wrapping_add_signed(word_offset)
+						.wrapping_add_signed(1);
+				} else {
+					self.program_counter += 1;
+				}
+			}
+			Instruction::Brcc { word_offset } => {
+				if !self.flags.carry() {
+					self.program_counter = self
+						.program_counter
+						.wrapping_add_signed(word_offset)
+						.wrapping_add_signed(1);
+				} else {
+					self.program_counter += 1;
+				}
+			}
 			Instruction::Call { word_address } => {
 				self.push_address(self.program_counter + instruction.get_word_size() as u16)?;
 				self.program_counter = word_address;

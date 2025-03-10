@@ -312,6 +312,9 @@ impl Opcode for Instruction {
 			0b1111 => match (opcode_16bit & 0x0c00) >> 10 {
 				//				3 bits at then end of opcode_16bit
 				0b00 => match opcode_16bit & 0x0007 {
+					0b000 => Some(Instruction::Brcs {
+						word_offset: load_k7(opcode_16bit),
+					}),
 					0b001 => Some(Instruction::Breq {
 						word_offset: load_k7(opcode_16bit),
 					}),
@@ -320,12 +323,16 @@ impl Opcode for Instruction {
 					}),
 					_ => None,
 				},
-				0b01 => {
-					let offset = load_k7(opcode_16bit);
-					Some(Instruction::Brne {
-						word_offset: offset,
-					})
-				}
+				//				3 bits at then end of opcode_16bit
+				0b01 => match opcode_16bit & 0x0007 {
+					0b000 => Some(Instruction::Brcc {
+						word_offset: load_k7(opcode_16bit),
+					}),
+					0b001 => Some(Instruction::Brne {
+						word_offset: load_k7(opcode_16bit),
+					}),
+					_ => None,
+				},
 				_ => None,
 			},
 			_ => None,

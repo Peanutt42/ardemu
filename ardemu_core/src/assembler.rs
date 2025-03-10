@@ -89,6 +89,8 @@ enum IntermediateInstruction {
 	Breq { symbol: String, line_number: usize },
 	Brne { symbol: String, line_number: usize },
 	Brlt { symbol: String, line_number: usize },
+	Brcs { symbol: String, line_number: usize },
+	Brcc { symbol: String, line_number: usize },
 	Instruction(Instruction),
 }
 impl IntermediateInstruction {
@@ -133,6 +135,18 @@ impl IntermediateInstruction {
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brlt {
 				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
 			}),
+			Self::Brcs {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brcs {
+				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
+			}),
+			Self::Brcc {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brcc {
+				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
+			}),
 			Self::Instruction(instruction) => Ok(instruction),
 		}
 	}
@@ -143,6 +157,8 @@ impl IntermediateInstruction {
 			Self::Breq { .. } => 1, // see of Instruction::Breq::get_word_size()
 			Self::Brne { .. } => 1, // see of Instruction::Brne::get_word_size()
 			Self::Brlt { .. } => 1, // see of Instruction::Brlt::get_word_size()
+			Self::Brcs { .. } => 1, // see of Instruction::Brlt::get_word_size()
+			Self::Brcc { .. } => 1, // see of Instruction::Brlt::get_word_size()
 			Self::Call { .. } => 2, // see of Instruction::Call::get_word_size()
 			Self::Jmp { .. } => 2,  // see of Instruction::Jmp::get_word_size()
 		}
@@ -195,6 +211,20 @@ fn parse_instruction(
 		"BRLT" => {
 			let symbol = parse_single_symbol(operands)?;
 			Ok(IntermediateInstruction::Brlt {
+				symbol,
+				line_number,
+			})
+		}
+		"BRCS" => {
+			let symbol = parse_single_symbol(operands)?;
+			Ok(IntermediateInstruction::Brcs {
+				symbol,
+				line_number,
+			})
+		}
+		"BRCC" => {
+			let symbol = parse_single_symbol(operands)?;
+			Ok(IntermediateInstruction::Brcc {
 				symbol,
 				line_number,
 			})

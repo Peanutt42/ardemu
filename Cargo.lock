@@ -139,6 +139,7 @@ version = "0.1.0"
 dependencies = [
  "ardemu_assemble_macro",
  "ardemu_instruction_helper_macro",
+ "elf",
  "ihex",
  "num_enum",
  "self-rust-tokenize",
@@ -353,6 +354,12 @@ name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
+
+[[package]]
+name = "avr-std-stub"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "839920177137ff472f3c35abf5b8166f331c6cf7f2dfa7ffd69f9aa7dc70b526"
 
 [[package]]
 name = "backtrace"
@@ -981,6 +988,12 @@ name = "either_n"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c91ae510829160d5cfb19eb4ae7b6e01d44b767ca8f727c6cee936e53cc9ae5"
+
+[[package]]
+name = "elf"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4445909572dbd556c457c849c4ca58623d84b27c8fff1e74b0b4227d8b90d17b"
 
 [[package]]
 name = "endi"
@@ -2807,6 +2820,13 @@ checksum = "f6d5f2436026b4f6e79dc829837d467cc7e9a55ee40e750d716713540715a2df"
 dependencies = [
  "cfg-if",
  "ordered-multimap",
+]
+
+[[package]]
+name = "rust_fib"
+version = "0.1.0"
+dependencies = [
+ "avr-std-stub",
 ]
 
 [[package]]

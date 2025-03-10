@@ -5,7 +5,8 @@
 #![deny(unsafe_code)]
 
 use ardemu_core::{
-	assemble, load_ihex_str, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8, Program,
+	assemble, load_elf, load_ihex_str, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8,
+	Program,
 	Register::{self, R9},
 	WordAddress,
 };
@@ -54,14 +55,16 @@ enum CodeSample {
 	Fib8,
 	Fib16,
 	RecursiveFib,
-	RustFib,
+	RustFibIHex,
+	RustFibElf,
 }
 impl CodeSample {
 	const ALL: &'static [CodeSample] = &[
 		CodeSample::Fib8,
 		CodeSample::Fib16,
 		CodeSample::RecursiveFib,
-		CodeSample::RustFib,
+		CodeSample::RustFibIHex,
+		CodeSample::RustFibElf,
 	];
 
 	fn get_source_code(&self) -> String {
@@ -78,8 +81,8 @@ impl CodeSample {
 				"ldi r16, 10 ; n = 10\n\n{}",
 				include_str!("../../sample_programs/recursive_fib.asm")
 			),
-			Self::RustFib => {
-				include_str!("../../sample_programs/rust_fib_disassembled.asm").to_string()
+			Self::RustFibIHex | Self::RustFibElf => {
+				include_str!("../../sample_programs/rust_fib.asm").to_string()
 			}
 		}
 	}
@@ -87,8 +90,11 @@ impl CodeSample {
 	#[allow(clippy::unwrap_used)]
 	fn get_program(&self) -> Program {
 		match self {
-			Self::RustFib => {
+			Self::RustFibIHex => {
 				load_ihex_str(include_str!("../../sample_programs/rust_fib.hex")).unwrap()
+			}
+			Self::RustFibElf => {
+				load_elf(include_bytes!("../../sample_programs/rust_fib.elf")).unwrap()
 			}
 			_ => assemble(&self.get_source_code()).unwrap(),
 		}
@@ -103,7 +109,8 @@ impl std::fmt::Display for CodeSample {
 				Self::Fib8 => "Fib 8-bit",
 				Self::Fib16 => "Fib 16-bit",
 				Self::RecursiveFib => "Recursive Fib",
-				Self::RustFib => "Rust Fib",
+				Self::RustFibIHex => "Rust Fib (.hex)",
+				Self::RustFibElf => "Rust Fib (.elf)",
 			}
 		)
 	}

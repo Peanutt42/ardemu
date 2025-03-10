@@ -66,10 +66,8 @@ pub enum AsmParseErrorType {
 	InvalidRegisterIoAddress(String),
 }
 
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
-pub enum LoadIHex {
-	#[error("failed to parse ihex file: {0}")]
-	Parse(#[from] ihex::ReaderError),
+#[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
+pub enum LoadProgramError {
 	#[error("unsupported instruction: {opcode_32bit:010X} at address {program_address:04X}")]
 	UnsupportedInstruction {
 		opcode_32bit: u32,
@@ -77,4 +75,26 @@ pub enum LoadIHex {
 	},
 	#[error("invalid alignment! must be a multiple of 2 (16-bit)")]
 	InvalidAlignment,
+}
+
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum LoadIHexError {
+	#[error("failed to parse ihex file: {0}")]
+	Parse(#[from] ihex::ReaderError),
+	#[error(transparent)]
+	Load(#[from] LoadProgramError),
+}
+
+#[derive(Debug, Error)]
+pub enum LoadElfError {
+	#[error(transparent)]
+	Parsing(#[from] elf::ParseError),
+	#[error("could not find code section or section was invalid")]
+	CouldNotFindCodeSection,
+	#[error("compressed elf file not supported")]
+	CompressedNotSupported,
+	#[error("non zero base code address is not supported")]
+	NonZeroBaseCodeAddress,
+	#[error(transparent)]
+	Load(#[from] LoadProgramError),
 }

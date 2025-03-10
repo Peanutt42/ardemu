@@ -1,5 +1,5 @@
-
-./template-bin.elf:     file format elf32-avr
+; Disassembled instructions from rust_fib.elf
+./rust_fib.elf:     file format elf32-avr
 
 
 Disassembly of section .text:
@@ -39,45 +39,43 @@ Disassembly of section .text:
   6e:	d8 e0       	ldi	r29, 0x08	; 8
   70:	de bf       	out	0x3e, r29	; 62
   72:	cd bf       	out	0x3d, r28	; 61
-  74:	0e 94 4d 00 	call	0x9a	; 0x9a <main>
-  78:	0c 94 5c 00 	jmp	0xb8	; 0xb8 <_exit>
+  74:	0e 94 53 00 	call	0xa6	; 0xa6 <main>
+  78:	0c 94 5b 00 	jmp	0xb6	; 0xb6 <_exit>
 
 0000007c <__bad_interrupt>:
   7c:	0c 94 00 00 	jmp	0	; 0x0 <__vectors>
 
-00000080 <_ZN12template_bin3fib17h381bcd22270dae12E>:
-  80:	83 95       	inc	r24
-  82:	21 e0       	ldi	r18, 0x01	; 1
-  84:	41 2d       	mov	r20, r1
-  86:	31 e0       	ldi	r19, 0x01	; 1
-  88:	94 2f       	mov	r25, r20
-  8a:	39 0f       	add	r19, r25
-  8c:	8a 95       	dec	r24
-  8e:	80 30       	cpi	r24, 0x00	; 0
-  90:	42 2f       	mov	r20, r18
-  92:	23 2f       	mov	r18, r19
-  94:	c9 f7       	brne	.-14     	; 0x88 <_ZN12template_bin3fib17h381bcd22270dae12E+0x8>
-  96:	89 2f       	mov	r24, r25
-  98:	08 95       	ret
+00000080 <_ZN8rust_fib3fib17h52828e8768a34918E>:
+  80:	0f 93       	push	r16
+  82:	1f 93       	push	r17
+  84:	18 2f       	mov	r17, r24
+  86:	01 2d       	mov	r16, r1
+  88:	12 30       	cpi	r17, 0x02	; 2
+  8a:	40 f0       	brcs	.+16     	; 0x9c <_ZN8rust_fib3fib17h52828e8768a34918E+0x1c>
+  8c:	81 2f       	mov	r24, r17
+  8e:	8a 95       	dec	r24
+  90:	0e 94 40 00 	call	0x80	; 0x80 <_ZN8rust_fib3fib17h52828e8768a34918E>
+  94:	08 0f       	add	r16, r24
+  96:	12 50       	subi	r17, 0x02	; 2
+  98:	12 30       	cpi	r17, 0x02	; 2
+  9a:	c0 f7       	brcc	.-16     	; 0x8c <_ZN8rust_fib3fib17h52828e8768a34918E+0xc>
+  9c:	01 0f       	add	r16, r17
+  9e:	80 2f       	mov	r24, r16
+  a0:	1f 91       	pop	r17
+  a2:	0f 91       	pop	r16
+  a4:	08 95       	ret
 
-0000009a <main>:
-  9a:	0f 93       	push	r16
-  9c:	1f 93       	push	r17
-  9e:	11 2d       	mov	r17, r1
-  a0:	01 2d       	mov	r16, r1
-  a2:	80 2f       	mov	r24, r16
-  a4:	0e 94 40 00 	call	0x80	; 0x80 <_ZN12template_bin3fib17h381bcd22270dae12E>
-  a8:	18 0f       	add	r17, r24
-  aa:	03 95       	inc	r16
-  ac:	0f 3f       	cpi	r16, 0xFF	; 255
-  ae:	c9 f7       	brne	.-14     	; 0xa2 <main+0x8>
-  b0:	81 2f       	mov	r24, r17
-  b2:	1f 91       	pop	r17
-  b4:	0f 91       	pop	r16
-  b6:	08 95       	ret
+000000a6 <main>:
+  a6:	8a e0       	ldi	r24, 0x0A	; 10
+  a8:	0e 94 40 00 	call	0x80	; 0x80 <_ZN8rust_fib3fib17h52828e8768a34918E>
+  ac:	68 2f       	mov	r22, r24
+  ae:	77 27       	eor	r23, r23
+  b0:	80 e0       	ldi	r24, 0x00	; 0
+  b2:	90 e0       	ldi	r25, 0x00	; 0
+  b4:	08 95       	ret
 
-000000b8 <_exit>:
-  b8:	f8 94       	cli
+000000b6 <_exit>:
+  b6:	f8 94       	cli
 
-000000ba <__stop_program>:
-  ba:	ff cf       	rjmp	.-2      	; 0xba <__stop_program>
+000000b8 <__stop_program>:
+  b8:	ff cf       	rjmp	.-2      	; 0xb8 <__stop_program>
