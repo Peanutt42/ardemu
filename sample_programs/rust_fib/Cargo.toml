@@ -5,3 +5,6 @@ edition = "2018"
 
 [dependencies]
 avr-std-stub = "1.0"
+
+# needed so that this crate is not included in ardemu workspace
+[workspace]
