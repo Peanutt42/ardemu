@@ -72,6 +72,9 @@ impl Program {
 		Ok(instructions)
 	}
 
+	/// returns the instructions, as if all where only 16-bit
+	/// 32-bit instructions are two 16-bit (1 word) instruction spots: [Some(Instruction::A64BitInstr), None]
+	/// this allows us to easily index with a program address (words)
 	pub fn len(&self) -> usize {
 		self.program_address_instruction_map.len()
 	}
@@ -97,6 +100,24 @@ impl Program {
 
 	pub fn get_debug_symbol(&self, address: WordAddress) -> Option<&String> {
 		self.debug_symbol_table.get(&address)
+	}
+
+	/// linear time complexity! (32-bit instructions take up two program addresses (2 words))
+	/// returns the index of the instruction based on the program address
+	/// returns None if the address is invalid
+	pub fn get_instruction_index(&self, address: WordAddress) -> Option<usize> {
+		let mut instruction_index = 0;
+		for (program_address, instruction) in
+			self.program_address_instruction_map.iter().enumerate()
+		{
+			if WordAddress(program_address as u32) == address {
+				return Some(instruction_index);
+			}
+			if instruction.is_some() {
+				instruction_index += 1;
+			}
+		}
+		None
 	}
 }
 

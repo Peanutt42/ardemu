@@ -240,14 +240,21 @@ impl App {
 	}
 
 	fn stick_to_current_instruction(&mut self) -> Task<Message> {
-		let program_counter = self.cpu_sim.read().cpu.get_program_counter();
-		scrollable::scroll_to(
-			INSTRUCTION_SCROLLABLE_ID.clone(),
-			scrollable::AbsoluteOffset {
-				x: 0.0,
-				y: INSTRUCTION_SCROLLABLE_PADDING + INSTRUCTION_HEIGHT * program_counter.0 as f32,
-			},
-		)
+		let cpu = &self.cpu_sim.read().cpu;
+		match cpu
+			.get_program()
+			.get_instruction_index(cpu.get_program_counter())
+		{
+			Some(instruction_index) => scrollable::scroll_to(
+				INSTRUCTION_SCROLLABLE_ID.clone(),
+				scrollable::AbsoluteOffset {
+					x: 0.0,
+					y: INSTRUCTION_SCROLLABLE_PADDING
+						+ INSTRUCTION_HEIGHT * instruction_index as f32,
+				},
+			),
+			None => Task::none(),
+		}
 	}
 
 	fn update(&mut self, message: Message) -> Task<Message> {
@@ -264,7 +271,11 @@ impl App {
 			Message::Skip => self.send_cpu_sim_message(CpuSimMessage::Skip),
 			Message::SetStickToCurrentInstruction(stick) => {
 				self.stick_to_current_instruction = stick;
-				Task::none()
+				if stick {
+					self.stick_to_current_instruction()
+				} else {
+					Task::none()
+				}
 			}
 			Message::AsmSourceCodeChanged(action) => {
 				let is_edit = action.is_edit();

@@ -71,6 +71,10 @@ impl Cpu {
 		self.flags
 	}
 
+	pub fn get_program(&self) -> &Program {
+		&self.program
+	}
+
 	pub fn get_program_counter(&self) -> WordAddress {
 		self.program_counter
 	}
