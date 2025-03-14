@@ -4,6 +4,10 @@ Try it out in the browser! (limited gui)
 [peanutt42.github.io/ardemu_web](https://peanutt42.github.io/ardemu_web)
 
 ![ardemu_gui](ardemu_gui/Screenshot.png)
+Run GUI with:
+```bash
+cargo r --release -p ardemu_gui
+```
 
 ## Sample: Fibonacci Sequence
 `fib.asm`:

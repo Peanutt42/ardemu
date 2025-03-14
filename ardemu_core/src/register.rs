@@ -112,7 +112,7 @@ impl WordAddress {
 impl std::fmt::Display for WordAddress {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		//					address is displayed in bytes, 1 word = 2 bytes
-		write!(f, "{:#06X}", self.0 * 2)
+		write!(f, "{:#06X}", self.0 as u64 * 2)
 	}
 }
 impl AsmOperand for WordAddress {
@@ -138,7 +138,7 @@ impl From<WordOffset16> for i32 {
 impl std::fmt::Display for WordOffset16 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		//					offset is displayed in bytes, 1 word = 2 bytes
-		write!(f, ".{:+}", self.0 * 2)
+		write!(f, ".{:+}", self.0 as i32 * 2)
 	}
 }
 impl AsmOperand for WordOffset16 {
@@ -164,7 +164,7 @@ impl From<WordOffset8> for i32 {
 impl std::fmt::Display for WordOffset8 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		//					offset is displayed in bytes, 1 word = 2 bytes
-		write!(f, ".{:+}", self.0 * 2)
+		write!(f, ".{:+}", self.0 as i16 * 2)
 	}
 }
 impl AsmOperand for WordOffset8 {
