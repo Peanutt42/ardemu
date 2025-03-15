@@ -9,17 +9,16 @@ scope: source.avrasm
 
 contexts:
   main:
-    - match: \b([nN][oO][pP]|[cC][oO][mM]|[nN][eE][gG]|[sS][wW][aA][pP]|[lL][sS][rR]|[rR][oO][rR]|[aA][sS][rR]|[mM][uU][lL]|[sS][bB][iI]|[cC][bB][iI]|[bB][sS][eE][tT]|[bB][cC][lL][rR]|[bB][sS][tT]|[bB][lL][dD]|[iI][nN]|[oO][uU][tT]|[bB][rR][eE][aA][kK]|[oO][rR]|[oO][rR][iI]|[cC][pP]|[cC][pP][sS][eE]|[aA][dD][cC]|[aA][dD][dD]|[aA][dD][iI][wW]|[aA][nN][dD]|[aA][nN][dD][iI]|[aA][sS][rR]|[bB][cC][cC]|[bB][cC][lL][rR]|[bB][rB][aA][cC]|[bB][rB][gG][eE]|[bB][rB][hH][cC]|[bB][rB][iI][dD]|[bB][rB][lL][oO]|[bB][rB][lL][tT]|[bB][rB][mM][iI]|[bB][rB][nN][eE]|[bB][rB][pP][lL]|[bB][rB][sS][hH]|[bB][rB][tT][cC]|[bB][sS][eE][tT]|[cC][bB][iI]|[cC][bB][rB]|[cC][lL][cC]|[cC][lL][hH]|[cC][lL][iI]|[cC][lL][nN]|[cC][lL][rB]|[cC][lL][sS]|[cC][lL][tT]|[cC][lL][vV]|[cC][oO][mM]|[cC][pP]|[cC][pP][cC]|[cC][pP][iI]|[cC][pP][sS][eE]|[dD][eE][cC]|[eE][lL][pP][mM]|[eE][oO][rB]|[iI][nN]|[iI][nN][cC]|[jJ][mM][pP]|[lL][dD][dD]|[lL][dD][iI]|[lL][dD][sS]|[lL][pP][mM]|[lL][sS][lL]|[lL][sS][rB]|[mM][oO][vV]|[mM][oO][vV][wW]|[mM][uU][lL]|[mM][uU][lL][sS]|[mM][uU][lL][sS][uU]|[nN][eE][gG]|[nN][oO][pP]|[oO][rB]|[oO][rB][iI]|[oO][uU][tT]|[pP][oO][pP]|[pP][uU][sS][hH]|[rB][cC][aA][lL]|[rB][eE][tT]|[rB][eE][tT][iI]|[rB][jJ][mM][pP]|[rB][oO][lL]|[rB][oO][rB]|[sS][bB][cC]|[sS][bB][iI]|[sS][bB][iI][cC]|[sS][bB][iI][sS]|[sS][bB][rB]|[sS][bB][rB][sS]|[sS][eE][cC]|[sS][eE][hH]|[sS][eE][iI]|[sS][eE][nN]|[sS][eE][rB]|[sS][eE][sS]|[sS][eE][tT]|[sS][lL][eE][eE][pP]|[sS][pP][mM]|[sS][tT][dD]|[sS][uU][bB]|[sS][uU][bB][iI]|[sS][uU][bB][iI][cC]|[sS][uU][bB][iI][sS]|[sS][wW][aA][pP]|[tT][sS][tT]|[wW][dD][rB]|[xX][cC][hH]|[xX][oO][rB]|[sS][tT][sS]|[sS][bB][iI][wW]|[sS][bB][cC][iI]|[cC][aA][lL][lL]|[bB][rR][eE][qQ])\b
+    # Keywords (AVR instructions)
+    - match: (?i)\b(nop|break|jmp|or|ori|eor|com|neg|swap|lsr|ror|asr|mul|ldi|mov|movw|rjmp|push|pop|cp|cpi|cpc|cpse|breq|brne|brlt|brcs|brcc|call|ret|sub|sbc|subi|sbci|sbiw|dec|add|adc|adiw|inc|and|andi|bset|bclr|sbi|cbi|bst|bld|sts|lds|out|in)\b
       scope: keyword.control.avr
-      captures:
-        1: keyword.control.avr
 
     # Registers (R0-R31, X/Y/Z pointers)
-    - match: \b[rR][0-3]?[0-9]\b|\b[XxYyZz]\b
+    - match: (?i)\b(r[0-3]?[0-9]|x|y|z)\b
       scope: variable.language.register.avr
 
     # Preprocessor directives
-    - match: ^\s*\.[a-zA-Z]+
+    - match: (?i)^\s*\.[a-z]+
       scope: keyword.other.directive.avr
       push:
         - meta_scope: meta.preprocessor.avr
@@ -27,11 +26,11 @@ contexts:
           pop: true
 
     # Numbers (hex, binary, decimal)
-    - match: \b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b|\b\d+\b
+    - match: (?i)\b(0x[0-9a-f]+|0b[01]+|\d+)\b
       scope: constant.numeric.avr
 
     # Labels
-    - match: "[a-zA-Z_][a-zA-Z0-9_]*"
+    - match: \b[a-zA-Z_]\w*\b
       scope: entity.name.function.label.avr
 
     # Comments
