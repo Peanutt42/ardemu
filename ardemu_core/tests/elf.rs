@@ -1,5 +1,5 @@
 use ardemu_core::{
-	load_elf, Instruction, Program,
+	load_elf, FlagType, Instruction, Program,
 	Register::{R1, R16, R17, R22, R23, R24, R28, R29},
 	UpperRegister, WordAddress, WordOffset16, WordOffset8,
 };
@@ -88,7 +88,8 @@ fn test_load_elf_file() {
 				Instruction::Ldi { register: UpperRegister::R24, value: 0x00.into() },
 				Instruction::Ldi { register: UpperRegister::R25, value: 0x00.into() },
 				Instruction::Ret,
-				Instruction::Cli,
+				// (CLI)
+				Instruction::Bclr { flag_type: FlagType::Interrupt },
 				Instruction::RJmp { word_offset: WordOffset16(-1) /* -1 words = -2 bytes */ },
 			];
 

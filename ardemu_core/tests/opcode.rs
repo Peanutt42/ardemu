@@ -1,7 +1,7 @@
 use ardemu_core::{
-	Instruction, LowerEvenRegister, Opcode,
+	FlagType, Imm3, Instruction, LowerEvenRegister, Opcode,
 	Register::{R0, R15, R16, R31},
-	UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
+	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
 
 #[test]
@@ -198,6 +198,12 @@ fn test_load_instructions_from_opcodes() {
 		},
 	);
 	test_16bit(
+		0b1111_0010_0000_1100,
+		Instruction::Brlt {
+			word_offset: WordOffset8(-63),
+		},
+	);
+	test_16bit(
 		0b1111_0010_0000_1000,
 		Instruction::Brcs {
 			word_offset: WordOffset8(-63),
@@ -223,6 +229,86 @@ fn test_load_instructions_from_opcodes() {
 		},
 	);
 	test_16bit(0b1001_0101_1111_1010, Instruction::Dec { register: R31 });
-	test_16bit(0b1001_0100_1111_1000, Instruction::Cli);
+	test_16bit(
+		0b1001_0100_1111_1000,
+		Instruction::Bclr {
+			flag_type: FlagType::Interrupt,
+		},
+	);
 	test_16bit(0b1001_0101_1111_0011, Instruction::Inc { register: R31 });
+	test_16bit(
+		0b0001_1100_1111_0000,
+		Instruction::Adc {
+			reg_dest: R15,
+			reg_read: R0,
+		},
+	);
+	test_16bit(
+		0b1001_0110_1100_1111,
+		Instruction::Adiw {
+			register: WordRegister::R24,
+			value: 63.into(),
+		},
+	);
+	test_16bit(
+		0b0010_0011_1111_1111,
+		Instruction::And {
+			reg_dest: R31,
+			reg_read: R31,
+		},
+	);
+	test_16bit(
+		0b0111_1111_0000_1111,
+		Instruction::Andi {
+			register: UpperRegister::R16,
+			value: 255.into(),
+		},
+	);
+	test_16bit(
+		0b1001_0100_0101_1000,
+		Instruction::Bset {
+			flag_type: FlagType::HalfCarry,
+		},
+	);
+	test_16bit(
+		0b1001_0100_1101_1000,
+		Instruction::Bclr {
+			flag_type: FlagType::HalfCarry,
+		},
+	);
+	test_16bit(
+		0b1001_1000_1111_1000,
+		Instruction::Cbi {
+			register_address: RegisterAddress(R31),
+			bit: Imm3(0),
+		},
+	);
+	test_16bit(
+		0b1111_1011_1111_0001,
+		Instruction::Bst {
+			register: R31,
+			bit: Imm3(1),
+		},
+	);
+	test_16bit(
+		0b1111_1001_1111_0001,
+		Instruction::Bld {
+			register: R31,
+			bit: Imm3(1),
+		},
+	);
+	test_32bit(
+		0b1001_0001_1111_0000_1111_1111_1111_1111,
+		Instruction::Lds {
+			register: R31,
+			address: 65535.into(),
+		},
+	);
+	test_16bit(
+		0b1011_0110_0000_1111,
+		Instruction::In {
+			register: R0,
+			address: 63.into(),
+		},
+	);
 }

@@ -21,10 +21,12 @@ pub struct Flags {
 	half_carry: bool,
 	/// T
 	bit_copy: bool,
-	// TODO: add I: Interrupt enabled
+	/// I
+	interrupt: bool,
 }
 
 impl Flags {
+	#[allow(clippy::too_many_arguments)]
 	pub fn new(
 		zero: bool,
 		negative: bool,
@@ -33,6 +35,7 @@ impl Flags {
 		carry: bool,
 		half_carry: bool,
 		bit_copy: bool,
+		interrupt: bool,
 	) -> Self {
 		Self {
 			zero,
@@ -42,6 +45,7 @@ impl Flags {
 			carry,
 			half_carry,
 			bit_copy,
+			interrupt,
 		}
 	}
 
@@ -54,17 +58,19 @@ impl Flags {
 			FlagType::Carry => self.carry = true,
 			FlagType::HalfCarry => self.half_carry = true,
 			FlagType::BitCopy => self.bit_copy = true,
+			FlagType::Interrupt => self.interrupt = true,
 		}
 	}
 	pub fn clear(&mut self, flag_type: FlagType) {
 		match flag_type {
-			FlagType::Zero => self.zero = true,
-			FlagType::Negative => self.negative = true,
-			FlagType::Sign => self.sign = true,
-			FlagType::Overflow => self.overflow = true,
-			FlagType::Carry => self.carry = true,
-			FlagType::HalfCarry => self.half_carry = true,
-			FlagType::BitCopy => self.bit_copy = true,
+			FlagType::Zero => self.zero = false,
+			FlagType::Negative => self.negative = false,
+			FlagType::Sign => self.sign = false,
+			FlagType::Overflow => self.overflow = false,
+			FlagType::Carry => self.carry = false,
+			FlagType::HalfCarry => self.half_carry = false,
+			FlagType::BitCopy => self.bit_copy = false,
+			FlagType::Interrupt => self.interrupt = false,
 		}
 	}
 	pub fn get(&self, flag_type: FlagType) -> bool {
@@ -76,6 +82,7 @@ impl Flags {
 			FlagType::Carry => self.carry,
 			FlagType::HalfCarry => self.half_carry,
 			FlagType::BitCopy => self.bit_copy,
+			FlagType::Interrupt => self.interrupt,
 		}
 	}
 
@@ -234,11 +241,11 @@ pub enum FlagType {
 	Sign = 4,
 	HalfCarry = 5,
 	BitCopy = 6,
-	// TODO: add I: Interrupt enabled = 7
+	Interrupt = 7,
 }
 
 impl FlagType {
-	pub const ALL: &[FlagType; 7] = &[
+	pub const ALL: &[FlagType; 8] = &[
 		Self::Carry,
 		Self::Zero,
 		Self::Negative,
@@ -246,6 +253,7 @@ impl FlagType {
 		Self::Sign,
 		Self::HalfCarry,
 		Self::BitCopy,
+		Self::Interrupt,
 	];
 
 	pub fn label(&self) -> char {
@@ -257,6 +265,7 @@ impl FlagType {
 			Self::Sign => 'S',
 			Self::HalfCarry => 'H',
 			Self::BitCopy => 'T',
+			Self::Interrupt => 'I',
 		}
 	}
 }

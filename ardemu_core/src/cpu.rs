@@ -448,7 +448,7 @@ impl Cpu {
 			}
 			Instruction::Adiw { register, value } => {
 				let register_value = self.read_register_pair16(register);
-				let result = register_value.wrapping_add(value.0);
+				let result = register_value.wrapping_add(value.0.into());
 				self.write_register_pair16(register, result);
 				self.flags.set_zns16(result);
 				self.program_counter += 1;
@@ -527,9 +527,6 @@ impl Cpu {
 			Instruction::In { register, address } => {
 				self.write_register(register, self.read_ram(address.0 as u16)?);
 				self.program_counter += 1;
-			}
-			Instruction::Cli => {
-				todo!("Implement clearing of global interrupt flag")
 			}
 		}
 

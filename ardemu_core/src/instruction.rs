@@ -200,10 +200,7 @@ pub enum Instruction {
 	},
 	/// adds immediate value to word register
 	/// register = register + value
-	Adiw {
-		register: WordRegister,
-		value: Imm16,
-	},
+	Adiw { register: WordRegister, value: Imm8 },
 	/// increment register value
 	/// register = register + 1
 	Inc { register: Register },
@@ -220,6 +217,7 @@ pub enum Instruction {
 		value: Imm8,
 	},
 	/// set cpu flag
+	/// (same as CLI when flag_type is FlagType::Interrupt)
 	Bset { flag_type: FlagType },
 	/// clear cpu flag
 	Bclr { flag_type: FlagType },
@@ -245,8 +243,6 @@ pub enum Instruction {
 	In { register: Register, address: Imm8 },
 	/// store value of register into sram address
 	Out { address: Imm8, register: Register },
-	/// Clears global interrupt flag
-	Cli,
 }
 
 #[derive(Debug, Clone, Copy)]

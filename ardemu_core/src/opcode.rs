@@ -1,6 +1,6 @@
 use crate::{
-	Imm16, Imm3, Imm8, Instruction, LowerEvenRegister, Register, RegisterAddress, UpperRegister,
-	WordAddress, WordOffset16, WordOffset8, WordRegister,
+	FlagType, Imm16, Imm3, Imm8, Instruction, LowerEvenRegister, Register, RegisterAddress,
+	UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
 
 pub trait Opcode: Sized {
@@ -98,6 +98,13 @@ impl Opcode for Instruction {
 			))
 		}
 
+		/// ____ ___d dddd _bbb
+		fn load_rd5_b3(opcode_16bit: u16) -> Option<(Register, Imm3)> {
+			let rd5 = ((opcode_16bit & 0x1f0) >> 4) as u8;
+			let b3 = (opcode_16bit & 0x0007) as u8;
+			Some((Register::try_from(rd5).ok()?, Imm3::try_from(b3).ok()?))
+		}
+
 		/// ____ ____ kkdd kkkk
 		fn load_rd2_k6(opcode_16bit: u16) -> Option<(WordRegister, Imm8)> {
 			let rd2 = ((opcode_16bit & 0x0030) >> 4) as u8;
@@ -139,6 +146,12 @@ impl Opcode for Instruction {
 			.into()
 		}
 
+		/// ____ ____ _sss ____
+		/// loads a flag type from the opcode
+		fn load_s3(opcode_16bit: u16) -> Option<FlagType> {
+			(((opcode_16bit & 0b111_0000) >> 4) as u8).try_into().ok()
+		}
+
 		match front_4_bits {
 			//				first 2 bits after first 4 bits
 			0b0000 => match (opcode_16bit & 0x0c00) >> 10 {
@@ -166,7 +179,31 @@ impl Opcode for Instruction {
 				_ => None,
 			},
 			//				first 2 bits after front_4_bits
+			0b0001 => match (opcode_16bit & 0x0c00) >> 10 {
+				0b00 => {
+					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
+					Some(Instruction::Cpse { reg_dest, reg_read })
+				}
+				0b01 => {
+					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
+					Some(Instruction::Cp { reg_dest, reg_read })
+				}
+				0b10 => {
+					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
+					Some(Instruction::Sub { reg_dest, reg_read })
+				}
+				0b11 => {
+					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
+					Some(Instruction::Adc { reg_dest, reg_read })
+				}
+				_ => None,
+			},
+			//				first 2 bits after front_4_bits
 			0b0010 => match (opcode_16bit & 0x0c00) >> 10 {
+				0b00 => {
+					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
+					Some(Instruction::And { reg_dest, reg_read })
+				}
 				0b10 => {
 					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
 					Some(Instruction::Or { reg_dest, reg_read })
@@ -189,19 +226,34 @@ impl Opcode for Instruction {
 				let (register, value) = load_rd4_k8(opcode_16bit)?;
 				Some(Instruction::Ori { register, value })
 			}
-			0b1011 => {
-				let (register, address) = load_rr5_a6(opcode_16bit)?;
-				Some(Instruction::Out { address, register })
-			}
+			// 				bit after the first_4_bits
+			0b1011 => match (opcode_16bit & 0x800) >> 11 {
+				0b0 => {
+					let (register, address) = load_rr5_a6(opcode_16bit)?;
+					Some(Instruction::In { address, register })
+				}
+				0b1 => {
+					let (register, address) = load_rr5_a6(opcode_16bit)?;
+					Some(Instruction::Out { address, register })
+				}
+				_ => None,
+			},
 			0b0100 => {
 				let (register, value) = load_rd4_k8(opcode_16bit)?;
 				Some(Instruction::Sbci { register, value })
 			}
-			// 3 bits after front_4_bits
+			//             3 bits after front_4_bits
 			0b1001 => match (opcode_16bit & 0xe00) >> 9 {
-				0b000 => Some(Instruction::Pop {
-					register: load_rr(opcode_16bit)?,
-				}),
+				0b000 => match opcode_16bit & 0xf {
+					0b0000 => {
+						let (register, address) = load_rr_k16(opcode_16bit, opcode_32bit)?;
+						Some(Instruction::Lds { register, address })
+					}
+					0b1111 => Some(Instruction::Pop {
+						register: load_rr(opcode_16bit)?,
+					}),
+					_ => None,
+				},
 				// "first" 4 bits of opcode
 				0b001 => match opcode_16bit & 0x000f {
 					0b0000 => {
@@ -225,11 +277,24 @@ impl Opcode for Instruction {
 						}),
 						_ => None,
 					},
-					// 				4 bits with 4 bit offset to right end of opcode
-					0b100 => match (opcode_16bit & 0x00f0) >> 4 {
-						0b0000 => Some(Instruction::Ret),
-						0b1001 => Some(Instruction::Break),
-						0b1111 => Some(Instruction::Cli),
+					//				right bit of the 4 bits one to the right of the first 4 bits
+					0b100 => match (opcode_16bit & 0x100) >> 8 {
+						//		left bit of the 4 bits one to the right of the end of the opcode
+						0b0 => match (opcode_16bit & 0x80) >> 7 {
+							0b0 => Some(Instruction::Bset {
+								flag_type: load_s3(opcode_16bit)?,
+							}),
+							0b1 => Some(Instruction::Bclr {
+								flag_type: load_s3(opcode_16bit)?,
+							}),
+							_ => None,
+						},
+						// 				4 bits with 4 bit offset to right end of opcode
+						0b1 => match (opcode_16bit & 0x00f0) >> 4 {
+							0b0000 => Some(Instruction::Ret),
+							0b1001 => Some(Instruction::Break),
+							_ => None,
+						},
 						_ => None,
 					},
 					0b011 => match opcode_16bit & 0x0001 {
@@ -264,6 +329,13 @@ impl Opcode for Instruction {
 					}),
 					_ => None,
 				},
+				0b100 => {
+					let (register_address, bit) = load_a5_b3(opcode_16bit)?;
+					Some(Instruction::Cbi {
+						register_address,
+						bit,
+					})
+				}
 				0b101 => {
 					let (register_address, bit) = load_a5_b3(opcode_16bit)?;
 					Some(Instruction::Sbi {
@@ -271,29 +343,21 @@ impl Opcode for Instruction {
 						bit,
 					})
 				}
-				0b011 => {
-					let (register, value) = load_rd2_k6(opcode_16bit)?;
-					Some(Instruction::Sbiw { register, value })
-				}
+				// single missing bit of the prior 3 bits
+				0b011 => match (opcode_16bit & 0x100) >> 8 {
+					0b0 => {
+						let (register, value) = load_rd2_k6(opcode_16bit)?;
+						Some(Instruction::Adiw { register, value })
+					}
+					0b1 => {
+						let (register, value) = load_rd2_k6(opcode_16bit)?;
+						Some(Instruction::Sbiw { register, value })
+					}
+					_ => None,
+				},
 				0b110 | 0b111 => {
 					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
 					Some(Instruction::Mul { reg_dest, reg_read })
-				}
-				_ => None,
-			},
-			//				first 2 bits after front_4_bits
-			0b0001 => match (opcode_16bit & 0x0c00) >> 10 {
-				0b10 => {
-					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
-					Some(Instruction::Sub { reg_dest, reg_read })
-				}
-				0b01 => {
-					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
-					Some(Instruction::Cp { reg_dest, reg_read })
-				}
-				0b00 => {
-					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
-					Some(Instruction::Cpse { reg_dest, reg_read })
 				}
 				_ => None,
 			},
@@ -307,6 +371,10 @@ impl Opcode for Instruction {
 			0b1110 => {
 				let (register, value) = load_rd4_k8(opcode_16bit)?;
 				Some(Instruction::Ldi { register, value })
+			}
+			0b0111 => {
+				let (register, value) = load_rd4_k8(opcode_16bit)?;
+				Some(Instruction::Andi { register, value })
 			}
 			//				first 2 bits after front_4_bits
 			0b1111 => match (opcode_16bit & 0x0c00) >> 10 {
@@ -331,6 +399,18 @@ impl Opcode for Instruction {
 					0b001 => Some(Instruction::Brne {
 						word_offset: load_k7(opcode_16bit),
 					}),
+					_ => None,
+				},
+				// 				second bit of the 4 bits after front_4_bits
+				0b10 => match (opcode_16bit & 0x300) >> 9 {
+					0b0 => {
+						let (register, bit) = load_rd5_b3(opcode_16bit)?;
+						Some(Instruction::Bld { register, bit })
+					}
+					0b1 => {
+						let (register, bit) = load_rd5_b3(opcode_16bit)?;
+						Some(Instruction::Bst { register, bit })
+					}
 					_ => None,
 				},
 				_ => None,
