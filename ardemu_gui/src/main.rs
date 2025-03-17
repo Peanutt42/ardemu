@@ -37,7 +37,7 @@ mod highlighter;
 
 mod style;
 use style::{
-	background_style, button_style, format_big_number, hidden_secondary_button_style, panel_style,
+	background_style, button_style, hidden_secondary_button_style, panel_style,
 	pick_list_menu_style, pick_list_style, primary_text_style, secondary_text_style,
 	text_editor_style,
 };
@@ -119,8 +119,7 @@ impl std::fmt::Display for CodeSample {
 #[derive(Debug, Clone)]
 struct CpuSim {
 	cpu: Cpu,
-	/// Instructions processed per second
-	instr_per_second: usize,
+	cycles_per_second: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -153,7 +152,7 @@ impl Default for App {
 		let cpu = Cpu::new(asm_program.clone());
 		let cpu_sim = CpuSim {
 			cpu: cpu.clone(),
-			instr_per_second: 0,
+			cycles_per_second: 0.0,
 		};
 		let (writable_cpu_sim, readable_cpu_sim) = triple_buffer::triple_buffer(&cpu_sim);
 		let (sender, receiver) = std::sync::mpsc::channel();
@@ -817,11 +816,8 @@ impl App {
 				button("Step").style(button_style).on_press(Message::Step),
 				button("Skip").style(button_style).on_press(Message::Skip),
 				container(
-					text!(
-						"Instructions/s = {}",
-						format_big_number(cpu_sim.instr_per_second)
-					)
-					.font(Font::MONOSPACE)
+					text!("{:.1} MHz", cpu_sim.cycles_per_second / 1_000_000.0)
+						.font(Font::MONOSPACE)
 				)
 				.padding(5)
 				.style(move |t: &Theme| container::Style {
@@ -849,9 +845,10 @@ fn cpu_simulation_thread(
 
 	loop {
 		let start = Instant::now();
-		let mut instructions_processed = 0;
 
 		if simulate_cpu {
+			let start_cycle = cpu.get_cycle();
+
 			const BULK_STEP_COUNT: usize = 1_000_000;
 			for _ in 0..BULK_STEP_COUNT {
 				match cpu.step() {
@@ -870,11 +867,11 @@ fn cpu_simulation_thread(
 					}
 				}
 			}
-			instructions_processed += BULK_STEP_COUNT;
+			let cycles_per_second =
+				(cpu.get_cycle() - start_cycle) as f64 / start.elapsed().as_secs_f64();
 			writable_cpu_sim.write(CpuSim {
 				cpu: cpu.clone(),
-				instr_per_second: (instructions_processed as f64 / start.elapsed().as_secs_f64())
-					as usize,
+				cycles_per_second,
 			});
 		}
 
@@ -914,7 +911,7 @@ fn cpu_simulation_thread(
 				writable_cpu_sim.write(CpuSim {
 					cpu: cpu.clone(),
 					// single instruction is not recorded
-					instr_per_second: 0,
+					cycles_per_second: 0.0,
 				});
 			};
 

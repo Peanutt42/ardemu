@@ -89,17 +89,6 @@ pub fn background_style(_theme: &Theme) -> container::Style {
 	}
 }
 
-/// formats 1000000 into "1M"
-pub fn format_big_number(n: usize) -> String {
-	if n < 1_000 {
-		n.to_string()
-	} else if n < 100_000 {
-		format!("{:.1}K", n as f32 / 1_000.0)
-	} else {
-		format!("{:.1}M", n as f32 / 1_000_000.0)
-	}
-}
-
 /// sets text color to primary theme color
 pub fn primary_text_style(theme: &Theme) -> text::Style {
 	text::Style {

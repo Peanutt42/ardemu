@@ -19,12 +19,14 @@ pub enum CpuStatus {
 pub struct Cpu {
 	program: Program,
 	registers: [u8; Register::COUNT],
-	// in words (1 word = 2 bytes)
+	/// in words (1 word = 2 bytes)
 	program_counter: WordAddress,
 	stack_pointer: u16,
+	/// Increments with each instruction executed
+	cycle: u64,
 	flags: Flags,
 	sram: [u8; Self::SRAM_SIZE], // SRAM (64KB)
-	// contains the program address of the breakpoints
+	/// contains the program address of the breakpoints
 	breakpoints: HashSet<WordAddress>,
 }
 
@@ -40,6 +42,7 @@ impl Cpu {
 			registers: [0; Register::COUNT],
 			program_counter: WordAddress(0),
 			stack_pointer: Self::STACK_START_ADDRESS,
+			cycle: 0,
 			flags: Flags::default(),
 			sram: [0u8; Self::SRAM_SIZE],
 			breakpoints: HashSet::new(),
@@ -51,6 +54,7 @@ impl Cpu {
 		self.registers = [0; Register::COUNT];
 		self.program_counter = WordAddress(0);
 		self.stack_pointer = Self::STACK_START_ADDRESS;
+		self.cycle = 0;
 		self.sram = [0u8; Self::SRAM_SIZE];
 		self.breakpoints.clear();
 	}
@@ -81,6 +85,10 @@ impl Cpu {
 
 	pub fn get_stack_pointer(&self) -> u16 {
 		self.stack_pointer
+	}
+
+	pub fn get_cycle(&self) -> u64 {
+		self.cycle
 	}
 
 	pub fn get_current_instruction(&self) -> Option<Instruction> {
@@ -184,6 +192,8 @@ impl Cpu {
 			return Ok(CpuStatus::BreakpointHit);
 		}
 
+		let mut cycles = 1;
+
 		match instruction {
 			Instruction::Nop => {
 				self.program_counter += 1;
@@ -193,6 +203,8 @@ impl Cpu {
 			}
 			Instruction::Jmp { word_address } => {
 				self.program_counter = word_address;
+				// jmp is 3 cycles
+				cycles += 2;
 			}
 			Instruction::Eor { reg_dest, reg_read } => {
 				let result = self.read_register(reg_dest) ^ self.read_register(reg_read);
@@ -248,6 +260,8 @@ impl Cpu {
 				self.write_register_pair16(LowerEvenRegister::R0, result);
 				self.flags.set_mul_zc(result);
 				self.program_counter += 1;
+				// mul is 2 cycles
+				cycles += 1;
 			}
 			Instruction::Or { reg_dest, reg_read } => {
 				let result = self.read_register(reg_dest) | self.read_register(reg_read);
@@ -325,6 +339,7 @@ impl Cpu {
 			}
 			Instruction::Breq { word_offset } => {
 				if self.flags.zero() {
+					cycles += 1;
 					self.program_counter = self
 						.program_counter
 						.wrapping_add_signed(word_offset)
@@ -335,6 +350,7 @@ impl Cpu {
 			}
 			Instruction::Brne { word_offset } => {
 				if !self.flags.zero() {
+					cycles += 1;
 					self.program_counter = self
 						.program_counter
 						.wrapping_add_signed(word_offset)
@@ -345,6 +361,7 @@ impl Cpu {
 			}
 			Instruction::Brlt { word_offset } => {
 				if self.flags.sign() {
+					cycles += 1;
 					self.program_counter = self
 						.program_counter
 						.wrapping_add_signed(word_offset)
@@ -355,6 +372,7 @@ impl Cpu {
 			}
 			Instruction::Brcs { word_offset } => {
 				if self.flags.carry() {
+					cycles += 1;
 					self.program_counter = self
 						.program_counter
 						.wrapping_add_signed(word_offset)
@@ -365,6 +383,7 @@ impl Cpu {
 			}
 			Instruction::Brcc { word_offset } => {
 				if !self.flags.carry() {
+					cycles += 1;
 					self.program_counter = self
 						.program_counter
 						.wrapping_add_signed(word_offset)
@@ -376,9 +395,13 @@ impl Cpu {
 			Instruction::Call { word_address } => {
 				self.push_address(self.program_counter + instruction.get_word_size() as u16)?;
 				self.program_counter = word_address;
+				// Call is 4 cycles
+				cycles += 3;
 			}
 			Instruction::Ret => {
 				self.program_counter = self.pop_address()?;
+				// Call is 4 cycles
+				cycles += 3;
 			}
 			Instruction::Sub { reg_dest, reg_read } => {
 				let dest_value = self.read_register(reg_dest);
@@ -515,10 +538,14 @@ impl Cpu {
 			Instruction::Sts { address, register } => {
 				self.write_ram(address.0, self.read_register(register))?;
 				self.program_counter += instruction.get_word_size();
+				// sts is 2 cycles
+				cycles += 1;
 			}
 			Instruction::Lds { register, address } => {
 				self.write_register(register, self.read_ram(address.0)?);
 				self.program_counter += instruction.get_word_size();
+				// lds is 2 cycles
+				cycles += 1;
 			}
 			Instruction::Out { address, register } => {
 				self.write_ram(address.0 as u16, self.read_register(register))?;
@@ -529,6 +556,8 @@ impl Cpu {
 				self.program_counter += 1;
 			}
 		}
+
+		self.cycle += cycles;
 
 		Ok(CpuStatus::Normal)
 	}

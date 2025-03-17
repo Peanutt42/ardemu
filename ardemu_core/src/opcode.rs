@@ -9,7 +9,6 @@ pub trait Opcode: Sized {
 	fn get_byte_size(&self) -> u8 {
 		self.get_word_size() * 2
 	}
-	fn get_cycles(&self) -> u8;
 	fn load(opcode_32bit: u32) -> Option<Self>;
 }
 
@@ -25,15 +24,6 @@ impl Opcode for Instruction {
 	}
 
 	fn get_word_size(&self) -> u8 {
-		if self.is_32bit() {
-			2
-		} else {
-			1
-		}
-	}
-
-	/// TODO: implement edge cases where instruction doesnt follow this pattern
-	fn get_cycles(&self) -> u8 {
 		if self.is_32bit() {
 			2
 		} else {
