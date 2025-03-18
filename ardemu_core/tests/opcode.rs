@@ -311,4 +311,10 @@ fn test_load_instructions_from_opcodes() {
 			address: 63.into(),
 		},
 	);
+	test_16bit(
+		0b1101_0000_0000_0000 | (u16::from_le_bytes((-2047_i16).to_le_bytes()) & 0x0fff),
+		Instruction::RCall {
+			word_offset: WordOffset16(-2047),
+		},
+	);
 }

@@ -403,6 +403,15 @@ impl Cpu {
 				// Call is 4 cycles
 				cycles += 3;
 			}
+			Instruction::RCall { word_offset } => {
+				self.push_address(self.program_counter + instruction.get_word_size() as u16)?;
+				self.program_counter = self
+					.program_counter
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1);
+				// RCall is mostly 2 cycles
+				cycles += 1;
+			}
 			Instruction::Sub { reg_dest, reg_read } => {
 				let dest_value = self.read_register(reg_dest);
 				let read_value = self.read_register(reg_read);

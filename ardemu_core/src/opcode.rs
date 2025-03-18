@@ -358,6 +358,9 @@ impl Opcode for Instruction {
 				let (register, value) = load_rd4_k8(opcode_16bit)?;
 				Some(Instruction::Subi { register, value })
 			}
+			0b1101 => Some(Instruction::RCall {
+				word_offset: load_k12(opcode_16bit),
+			}),
 			0b1110 => {
 				let (register, value) = load_rd4_k8(opcode_16bit)?;
 				Some(Instruction::Ldi { register, value })

@@ -36,6 +36,7 @@ fn test_assemble_every_instruction() {
 			brcs begin
 			brcc begin
 			call begin    ; would also be a infinitive loop
+			rcall begin   ; would also be a infinitive loop
 			ret
 			sub r16, r17
 			sbc r16, r17
@@ -147,6 +148,10 @@ fn test_assemble_every_instruction() {
 		},
 		Instruction::Call {
 			word_address: WordAddress(0),
+		},
+		// update offset, if relative offset to 'begin' changes in the source code
+		Instruction::RCall {
+			word_offset: WordOffset16(-32),
 		},
 		Instruction::Ret {},
 		Instruction::Sub {

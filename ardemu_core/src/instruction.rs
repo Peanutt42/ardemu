@@ -155,6 +155,9 @@ pub enum Instruction {
 	/// ; basically
 	/// PC = pop()
 	Ret,
+	/// call subroutine relative to current address
+	#[skip_parse_asm_instruction]
+	RCall { word_offset: WordOffset16 },
 	/// subtract register values and stores result in reg_dest (without carry)
 	/// reg_dest = reg_dest - reg_read
 	Sub {
@@ -278,6 +281,7 @@ impl Instruction {
 			Self::Push { .. } => Some(MemoryAddressRange::SingleByte(stack_pointer as u32)),
 			Self::Pop { .. } => Some(MemoryAddressRange::SingleByte(stack_pointer as u32 + 1)),
 			Self::Call { .. } => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
+			Self::RCall { .. } => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
 			Self::Ret => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
 			_ => None,
 		}
@@ -292,6 +296,11 @@ impl Instruction {
 		match self {
 			Self::Jmp { word_address } => Some(word_address),
 			Self::Call { word_address } => Some(word_address),
+			Self::RCall { word_offset } => Some(
+				program_address_of_instruction
+					.wrapping_add_signed(word_offset)
+					.wrapping_add_signed(1),
+			),
 			Self::Ret => {
 				if is_currently_executing {
 					Some(return_address_in_stack)

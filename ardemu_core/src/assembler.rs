@@ -88,6 +88,7 @@ fn split_mnemonic_operands(line: &str) -> (String, Vec<&str>) {
 enum IntermediateInstruction {
 	Jmp { symbol: String, line_number: usize },
 	Call { symbol: String, line_number: usize },
+	RCall { symbol: String, line_number: usize },
 	Breq { symbol: String, line_number: usize },
 	Brne { symbol: String, line_number: usize },
 	Brlt { symbol: String, line_number: usize },
@@ -119,6 +120,12 @@ impl IntermediateInstruction {
 				line_number,
 			} => resolve_symbol(symbol, line_number)
 				.map(|word_address| Instruction::Call { word_address }),
+			Self::RCall {
+				symbol,
+				line_number,
+			} => resolve_symbol(symbol, line_number).map(|word_address| Instruction::RCall {
+				word_offset: ((word_address.0 as i32 - program_address.0 as i32) as i16).into(),
+			}),
 			Self::Breq {
 				symbol,
 				line_number,
@@ -156,13 +163,14 @@ impl IntermediateInstruction {
 	fn get_word_size(&self) -> u8 {
 		match self {
 			Self::Instruction(instruction) => instruction.get_word_size(),
-			Self::Breq { .. } => 1, // see of Instruction::Breq::get_word_size()
-			Self::Brne { .. } => 1, // see of Instruction::Brne::get_word_size()
-			Self::Brlt { .. } => 1, // see of Instruction::Brlt::get_word_size()
-			Self::Brcs { .. } => 1, // see of Instruction::Brlt::get_word_size()
-			Self::Brcc { .. } => 1, // see of Instruction::Brlt::get_word_size()
-			Self::Call { .. } => 2, // see of Instruction::Call::get_word_size()
-			Self::Jmp { .. } => 2,  // see of Instruction::Jmp::get_word_size()
+			Self::Breq { .. } => 1,  // see of Instruction::Breq::get_word_size()
+			Self::Brne { .. } => 1,  // see of Instruction::Brne::get_word_size()
+			Self::Brlt { .. } => 1,  // see of Instruction::Brlt::get_word_size()
+			Self::Brcs { .. } => 1,  // see of Instruction::Brlt::get_word_size()
+			Self::Brcc { .. } => 1,  // see of Instruction::Brlt::get_word_size()
+			Self::Call { .. } => 2,  // see of Instruction::Call::get_word_size()
+			Self::RCall { .. } => 1, // see of Instruction::RCall::get_word_size()
+			Self::Jmp { .. } => 2,   // see of Instruction::Jmp::get_word_size()
 		}
 	}
 }
@@ -234,6 +242,13 @@ fn parse_instruction(
 		"CALL" => {
 			let symbol = parse_single_symbol(operands)?;
 			Ok(IntermediateInstruction::Call {
+				symbol,
+				line_number,
+			})
+		}
+		"RCALL" => {
+			let symbol = parse_single_symbol(operands)?;
+			Ok(IntermediateInstruction::RCall {
 				symbol,
 				line_number,
 			})
