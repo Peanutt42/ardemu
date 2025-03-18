@@ -1,4 +1,6 @@
-use crate::{AsmParseError, AsmParseErrorType, Instruction, Opcode, Program, WordAddress};
+use crate::{
+	AsmParseError, AsmParseErrorType, FlagType, Instruction, Opcode, Program, WordAddress,
+};
 use std::collections::HashMap;
 
 struct Line {
@@ -82,7 +84,7 @@ fn split_mnemonic_operands(line: &str) -> (String, Vec<&str>) {
 }
 
 /// Substitutes a LDA instruction to a program address with a LDA instruction to a symbol, which is later converted back to a LDA instruction to a program address.
-// #[derive(Debug, ParseAsmInstruction)]
+#[derive(Debug)]
 enum IntermediateInstruction {
 	Jmp { symbol: String, line_number: usize },
 	Call { symbol: String, line_number: usize },
@@ -235,6 +237,18 @@ fn parse_instruction(
 				symbol,
 				line_number,
 			})
+		}
+		"CLI" => {
+			if operands.is_empty() {
+				Ok(IntermediateInstruction::Instruction(Instruction::Bclr {
+					flag_type: FlagType::Interrupt,
+				}))
+			} else {
+				Err(AsmParseErrorType::InvalidArgumentCount {
+					expected_count: 0,
+					actual_count: operands.len(),
+				})
+			}
 		}
 		_ => Instruction::parse_asm_instruction(mnemonic, operands)
 			.map(IntermediateInstruction::Instruction),

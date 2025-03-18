@@ -51,6 +51,7 @@ fn test_assemble_every_instruction() {
 			andi r16, 1
 			bset 1
 			bclr 1
+			cli
 			sbi 0x1F, 0
 			cbi 0x1F, 0
 			bst r16, 1
@@ -195,6 +196,10 @@ fn test_assemble_every_instruction() {
 		},
 		Instruction::Bclr {
 			flag_type: FlagType::Zero, // 1
+		},
+		// cli is the same as bclr 7 (Interrupt)
+		Instruction::Bclr {
+			flag_type: FlagType::Interrupt,
 		},
 		Instruction::Sbi {
 			register_address: R31.into(),
