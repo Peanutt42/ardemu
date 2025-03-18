@@ -57,6 +57,7 @@ enum CodeSample {
 	RecursiveFib,
 	RustFibIHex,
 	RustFibElf,
+	BlinkLED,
 }
 impl CodeSample {
 	const ALL: &'static [CodeSample] = &[
@@ -65,6 +66,7 @@ impl CodeSample {
 		CodeSample::RecursiveFib,
 		CodeSample::RustFibIHex,
 		CodeSample::RustFibElf,
+		CodeSample::BlinkLED,
 	];
 
 	fn get_source_code(&self) -> String {
@@ -84,6 +86,7 @@ impl CodeSample {
 			Self::RustFibIHex | Self::RustFibElf => {
 				include_str!("../../sample_programs/rust_fib.asm").to_string()
 			}
+			Self::BlinkLED => include_str!("../../sample_programs/blink.asm").to_string(),
 		}
 	}
 
@@ -111,6 +114,7 @@ impl std::fmt::Display for CodeSample {
 				Self::RecursiveFib => "Recursive Fib",
 				Self::RustFibIHex => "Rust Fib (.hex)",
 				Self::RustFibElf => "Rust Fib (.elf)",
+				Self::BlinkLED => "Blink LED",
 			}
 		)
 	}
@@ -825,6 +829,15 @@ impl App {
 					border: rounded(8),
 					..Default::default()
 				}),
+				Space::new(Fill, 0.0),
+				text!(
+					"Builtin LED: {}",
+					if cpu.is_builtin_led_on() {
+						"HIGH"
+					} else {
+						"LOW"
+					}
+				),
 			]
 			.align_y(Vertical::Center)
 			.spacing(10),

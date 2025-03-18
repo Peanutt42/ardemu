@@ -36,6 +36,10 @@ impl Cpu {
 	const STACK_START_ADDRESS: u16 = 0xFEFF;
 	const STACK_END_ADDRESS: u16 = 0xFC00;
 
+	/// pins
+	const DDRB_ADDR: usize = 0x24;
+	const PORTB_ADDR: usize = 0x25;
+
 	pub fn new(program: Program) -> Self {
 		Self {
 			program,
@@ -93,6 +97,14 @@ impl Cpu {
 
 	pub fn get_current_instruction(&self) -> Option<Instruction> {
 		self.program.get(self.program_counter)
+	}
+
+	pub fn is_builtin_led_on(&self) -> bool {
+		let ddrb = self.sram[Self::DDRB_ADDR];
+		let ddrb_is_output = (ddrb & 0x20) != 0;
+		let portb = self.sram[Self::PORTB_ADDR];
+		let builtin_led_on = (portb & 0x20) != 0;
+		ddrb_is_output && builtin_led_on
 	}
 
 	pub fn read_register(&self, reg: impl Into<Register>) -> u8 {

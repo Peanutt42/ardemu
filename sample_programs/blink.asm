@@ -1,0 +1,14 @@
+; r1 = 0x20
+ldi r16, 0x20
+mov r1, r16
+
+; 0x24: DDRB, set as output (0x20)
+out 0x24, r1
+
+loop:
+	; 0x25: PORTB, set HIGH (0x20)
+	out 0x25, r1
+	; 0x25: PORTB, set LOW (0x00)
+	out 0x25, r0
+
+	jmp loop
