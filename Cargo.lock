@@ -141,6 +141,7 @@ dependencies = [
  "ardemu_instruction_helper_macro",
  "elf",
  "ihex",
+ "num-traits",
  "num_enum",
  "self-rust-tokenize",
  "thiserror 2.0.11",

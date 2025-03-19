@@ -1,7 +1,9 @@
+use num_traits::Num;
+
 use crate::{
 	AsmParseError, AsmParseErrorType, FlagType, Instruction, Opcode, Program, WordAddress,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, num::ParseIntError, str::FromStr};
 
 struct Line {
 	/// preprocessed line
@@ -42,25 +44,28 @@ pub trait AsmOperand: Sized {
 
 impl AsmOperand for i16 {
 	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
-		parse_number_operand(operand).map(|n| n as i16)
+		parse_number_operand(operand)
 	}
 }
 
 /// parses different number formats like "0x123" or "0b10101" and normal "42"
-pub fn parse_number_operand(operand: &str) -> Result<i32, AsmParseErrorType> {
+pub fn parse_number_operand<T>(operand: &str) -> Result<T, AsmParseErrorType>
+where
+	T: FromStr<Err = ParseIntError> + Num<FromStrRadixErr = ParseIntError>,
+{
 	if let Some(operand) = operand.strip_prefix("0x") {
-		i32::from_str_radix(operand, 16).map_err(|source| AsmParseErrorType::InvalidNumber {
+		T::from_str_radix(operand, 16).map_err(|source| AsmParseErrorType::InvalidNumber {
 			string: operand.to_string(),
 			source,
 		})
 	} else if let Some(operand) = operand.strip_prefix("0b") {
-		i32::from_str_radix(operand, 2).map_err(|source| AsmParseErrorType::InvalidNumber {
+		T::from_str_radix(operand, 2).map_err(|source| AsmParseErrorType::InvalidNumber {
 			string: operand.to_string(),
 			source,
 		})
 	} else {
 		operand
-			.parse::<i32>()
+			.parse::<T>()
 			.map_err(|source| AsmParseErrorType::InvalidNumber {
 				string: operand.to_string(),
 				source,

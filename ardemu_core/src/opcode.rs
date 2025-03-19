@@ -46,8 +46,9 @@ impl Opcode for Instruction {
 
 		/// ____ kkkk dddd kkkk
 		fn load_rd4_k8(opcode_16bit: u16) -> Option<(UpperRegister, Imm8)> {
-			let d4 = 16 + ((opcode_16bit >> 4) & 0xf) as u8;
-			let rd4 = UpperRegister::try_from(d4).ok()?;
+			let d4 = ((opcode_16bit >> 4) & 0xf) as u8;
+			// upper registers start at R16
+			let rd4 = UpperRegister::try_from(d4 + UpperRegister::R16 as u8).ok()?;
 			let k8 = (((opcode_16bit & 0x0f00) >> 4) | (opcode_16bit & 0xf)) as u8;
 			Some((rd4, k8.into()))
 		}
@@ -99,7 +100,13 @@ impl Opcode for Instruction {
 		fn load_rd2_k6(opcode_16bit: u16) -> Option<(WordRegister, Imm8)> {
 			let rd2 = ((opcode_16bit & 0x0030) >> 4) as u8;
 			let k6 = (((opcode_16bit & 0x00c0) >> 2) | (opcode_16bit & 0x000f)) as u8;
-			Some((WordRegister::try_from(rd2).ok()?, k6.into()))
+			// rd2 = 0 means WordRegister::R24
+			// rd2 = 1 means WordRegister::R26
+			// ..
+			Some((
+				WordRegister::try_from(rd2 * 2 + WordRegister::R24 as u8).ok()?,
+				k6.into(),
+			))
 		}
 
 		/// ____ ___d dddd ____ kkkk kkkk kkkk kkkk   (32-bit!)

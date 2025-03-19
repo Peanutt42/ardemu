@@ -340,7 +340,7 @@ impl Cpu {
 			Instruction::Cpse { reg_dest, reg_read } => {
 				if self.read_register(reg_dest) == self.read_register(reg_read) {
 					let next_instruction_word_size =
-						match self.program.get(self.get_program_counter() + 1) {
+						match self.program.get(self.get_program_counter() + 1u32) {
 							Some(next_instruction) => next_instruction.get_word_size(),
 							None => 1,
 						};
