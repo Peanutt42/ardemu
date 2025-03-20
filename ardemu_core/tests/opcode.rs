@@ -1,5 +1,5 @@
 use ardemu_core::{
-	FlagType, Imm3, Instruction, LowerEvenRegister, Opcode,
+	FlagType, Imm3, Instruction, LowerEvenRegister, Opcode, PointerRegister,
 	Register::{R0, R15, R16, R31},
 	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
@@ -229,12 +229,8 @@ fn test_load_instructions_from_opcodes() {
 		},
 	);
 	test_16bit(0b1001_0101_1111_1010, Instruction::Dec { register: R31 });
-	test_16bit(
-		0b1001_0100_1111_1000,
-		Instruction::Bclr {
-			flag_type: FlagType::Interrupt,
-		},
-	);
+	test_16bit(0b1001_0100_0111_1000, Instruction::SEI);
+	test_16bit(0b1001_0100_1111_1000, Instruction::CLI);
 	test_16bit(0b1001_0101_1111_0011, Instruction::Inc { register: R31 });
 	test_16bit(
 		0b0001_1100_1111_0000,
@@ -315,6 +311,133 @@ fn test_load_instructions_from_opcodes() {
 		0b1101_0000_0000_0000 | (u16::from_le_bytes((-2047_i16).to_le_bytes()) & 0x0fff),
 		Instruction::RCall {
 			word_offset: WordOffset16(-2047),
+		},
+	);
+	test_16bit(0b1001_0101_0001_1000, Instruction::Reti);
+	test_16bit(
+		0b1001_0001_1111_1100,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::X,
+		},
+	);
+	test_16bit(
+		0b1001_0001_1111_1101,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::X_POST_INC,
+		},
+	);
+	test_16bit(
+		0b1001_0001_1111_1110,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::X_PRE_DEC,
+		},
+	);
+	test_16bit(
+		0b1000_0001_1111_1000,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::Y,
+		},
+	);
+	test_16bit(
+		0b1001_0001_1111_1001,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::Y_POST_INC,
+		},
+	);
+	test_16bit(
+		0b1001_0001_1111_1010,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::Y_PRE_DEC,
+		},
+	);
+	test_16bit(
+		0b1000_0001_1111_0000,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::Z,
+		},
+	);
+	test_16bit(
+		0b1001_0001_1111_0001,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::Z_POST_INC,
+		},
+	);
+	test_16bit(
+		0b1001_0001_1111_0010,
+		Instruction::Ld {
+			register: R31,
+			pointer_register: PointerRegister::Z_PRE_DEC,
+		},
+	);
+	test_16bit(
+		0b1001_0011_1111_1100,
+		Instruction::St {
+			pointer_register: PointerRegister::X,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1001_0011_1111_1101,
+		Instruction::St {
+			pointer_register: PointerRegister::X_POST_INC,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1001_0011_1111_1110,
+		Instruction::St {
+			pointer_register: PointerRegister::X_PRE_DEC,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1000_0011_1111_1000,
+		Instruction::St {
+			pointer_register: PointerRegister::Y,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1001_0011_1111_1001,
+		Instruction::St {
+			pointer_register: PointerRegister::Y_POST_INC,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1001_0011_1111_1010,
+		Instruction::St {
+			pointer_register: PointerRegister::Y_PRE_DEC,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1000_0011_1111_0000,
+		Instruction::St {
+			pointer_register: PointerRegister::Z,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1001_0011_1111_0001,
+		Instruction::St {
+			pointer_register: PointerRegister::Z_POST_INC,
+			register: R31,
+		},
+	);
+	test_16bit(
+		0b1001_0011_1111_0010,
+		Instruction::St {
+			pointer_register: PointerRegister::Z_PRE_DEC,
+			register: R31,
 		},
 	);
 }

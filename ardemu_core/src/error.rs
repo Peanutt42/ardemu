@@ -64,6 +64,8 @@ pub enum AsmParseErrorType {
 	ExpectedBitLocation(String),
 	#[error("invalid io address: {0}, expected 0x00-0x1F (Register IO space)")]
 	InvalidRegisterIoAddress(String),
+	#[error("invalid pointer register: expected something like '-X' or 'Z+', but got {0}")]
+	InvalidPointerRegister(String),
 }
 
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]

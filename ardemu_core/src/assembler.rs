@@ -1,8 +1,6 @@
 use num_traits::Num;
 
-use crate::{
-	AsmParseError, AsmParseErrorType, FlagType, Instruction, Opcode, Program, WordAddress,
-};
+use crate::{AsmParseError, AsmParseErrorType, Instruction, Opcode, Program, WordAddress};
 use std::{collections::HashMap, num::ParseIntError, str::FromStr};
 
 struct Line {
@@ -258,11 +256,19 @@ fn parse_instruction(
 				line_number,
 			})
 		}
+		"SEI" => {
+			if operands.is_empty() {
+				Ok(IntermediateInstruction::Instruction(Instruction::SEI))
+			} else {
+				Err(AsmParseErrorType::InvalidArgumentCount {
+					expected_count: 0,
+					actual_count: operands.len(),
+				})
+			}
+		}
 		"CLI" => {
 			if operands.is_empty() {
-				Ok(IntermediateInstruction::Instruction(Instruction::Bclr {
-					flag_type: FlagType::Interrupt,
-				}))
+				Ok(IntermediateInstruction::Instruction(Instruction::CLI))
 			} else {
 				Err(AsmParseErrorType::InvalidArgumentCount {
 					expected_count: 0,

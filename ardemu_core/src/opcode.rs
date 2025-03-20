@@ -1,6 +1,6 @@
 use crate::{
-	FlagType, Imm16, Imm3, Imm8, Instruction, LowerEvenRegister, Register, RegisterAddress,
-	UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
+	FlagType, Imm16, Imm3, Imm8, Instruction, LowerEvenRegister, PointerRegister, Register,
+	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
 
 pub trait Opcode: Sized {
@@ -241,11 +241,40 @@ impl Opcode for Instruction {
 			}
 			//             3 bits after front_4_bits
 			0b1001 => match (opcode_16bit & 0xe00) >> 9 {
+				// 			4 bits at the right end of the opcode
 				0b000 => match opcode_16bit & 0xf {
 					0b0000 => {
 						let (register, address) = load_rr_k16(opcode_16bit, opcode_32bit)?;
 						Some(Instruction::Lds { register, address })
 					}
+					0b0001 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Z_POST_INC,
+					}),
+					0b0010 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Z_PRE_DEC,
+					}),
+					0b1001 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Y_POST_INC,
+					}),
+					0b1010 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Y_PRE_DEC,
+					}),
+					0b1100 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::X,
+					}),
+					0b1101 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::X_POST_INC,
+					}),
+					0b1110 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::X_PRE_DEC,
+					}),
 					0b1111 => Some(Instruction::Pop {
 						register: load_rr(opcode_16bit)?,
 					}),
@@ -257,6 +286,34 @@ impl Opcode for Instruction {
 						let (register, address) = load_rr_k16(opcode_16bit, opcode_32bit)?;
 						Some(Instruction::Sts { address, register })
 					}
+					0b0001 => Some(Instruction::St {
+						pointer_register: PointerRegister::Z_POST_INC,
+						register: load_rr(opcode_16bit)?,
+					}),
+					0b0010 => Some(Instruction::St {
+						pointer_register: PointerRegister::Z_PRE_DEC,
+						register: load_rr(opcode_16bit)?,
+					}),
+					0b1001 => Some(Instruction::St {
+						pointer_register: PointerRegister::Y_POST_INC,
+						register: load_rr(opcode_16bit)?,
+					}),
+					0b1010 => Some(Instruction::St {
+						pointer_register: PointerRegister::Y_PRE_DEC,
+						register: load_rr(opcode_16bit)?,
+					}),
+					0b1100 => Some(Instruction::St {
+						pointer_register: PointerRegister::X,
+						register: load_rr(opcode_16bit)?,
+					}),
+					0b1101 => Some(Instruction::St {
+						pointer_register: PointerRegister::X_POST_INC,
+						register: load_rr(opcode_16bit)?,
+					}),
+					0b1110 => Some(Instruction::St {
+						pointer_register: PointerRegister::X_PRE_DEC,
+						register: load_rr(opcode_16bit)?,
+					}),
 					0b1111 => Some(Instruction::Push {
 						register: load_rr(opcode_16bit)?,
 					}),
@@ -289,6 +346,7 @@ impl Opcode for Instruction {
 						// 				4 bits with 4 bit offset to right end of opcode
 						0b1 => match (opcode_16bit & 0x00f0) >> 4 {
 							0b0000 => Some(Instruction::Ret),
+							0b0001 => Some(Instruction::Reti),
 							0b1001 => Some(Instruction::Break),
 							_ => None,
 						},
@@ -356,6 +414,34 @@ impl Opcode for Instruction {
 					let (reg_dest, reg_read) = load_rd5_rr5(opcode_16bit)?;
 					Some(Instruction::Mul { reg_dest, reg_read })
 				}
+				_ => None,
+			},
+			//				last 4 bits at the right end of the opcode
+			0b1000 => match opcode_16bit & 0xf {
+				//				first 3 bits after first_4_bits
+				0b1000 => match (opcode_16bit & 0xe00) >> 9 {
+					0b000 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Y,
+					}),
+					0b001 => Some(Instruction::St {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Y,
+					}),
+					_ => None,
+				},
+				//				first 3 bits after first_4_bits
+				0b0000 => match (opcode_16bit & 0xe00) >> 9 {
+					0b000 => Some(Instruction::Ld {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Z,
+					}),
+					0b001 => Some(Instruction::St {
+						register: load_rr(opcode_16bit)?,
+						pointer_register: PointerRegister::Z,
+					}),
+					_ => None,
+				},
 				_ => None,
 			},
 			0b1100 => Some(Instruction::RJmp {

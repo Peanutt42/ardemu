@@ -245,7 +245,7 @@ pub enum FlagType {
 }
 
 impl FlagType {
-	pub const ALL: &[FlagType; 8] = &[
+	pub const ALL: &'static [FlagType; 8] = &[
 		Self::Carry,
 		Self::Zero,
 		Self::Negative,

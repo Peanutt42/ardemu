@@ -1,6 +1,7 @@
 use ardemu_core::{
-	assemble, AsmParseError, AsmParseErrorType, FlagType, Instruction, LowerEvenRegister, Program,
-	UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister, R0, R1, R16, R17, R31,
+	assemble, AsmParseError, AsmParseErrorType, FlagType, Instruction, LowerEvenRegister,
+	PointerRegister, Program, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
+	R0, R1, R16, R17, R31,
 };
 
 #[test]
@@ -38,6 +39,7 @@ fn test_assemble_every_instruction() {
 			call begin    ; would also be a infinitive loop
 			rcall begin   ; would also be a infinitive loop
 			ret
+			reti
 			sub r16, r17
 			sbc r16, r17
 			subi r16, 1
@@ -52,6 +54,7 @@ fn test_assemble_every_instruction() {
 			andi r16, 1
 			bset 1
 			bclr 1
+			sei
 			cli
 			sbi 0x1F, 0
 			cbi 0x1F, 0
@@ -59,6 +62,8 @@ fn test_assemble_every_instruction() {
 			bld r16, 1
 			sts 0x042, r0
 			lds r0, 0x042
+			st X+, r0
+			ld r0, -X
 			out 0x042, r0
 			in r0, 0x042
 			",
@@ -153,7 +158,8 @@ fn test_assemble_every_instruction() {
 		Instruction::RCall {
 			word_offset: WordOffset16(-32),
 		},
-		Instruction::Ret {},
+		Instruction::Ret,
+		Instruction::Reti,
 		Instruction::Sub {
 			reg_dest: R16,
 			reg_read: R17,
@@ -202,10 +208,8 @@ fn test_assemble_every_instruction() {
 		Instruction::Bclr {
 			flag_type: FlagType::Zero, // 1
 		},
-		// cli is the same as bclr 7 (Interrupt)
-		Instruction::Bclr {
-			flag_type: FlagType::Interrupt,
-		},
+		Instruction::SEI,
+		Instruction::CLI,
 		Instruction::Sbi {
 			register_address: R31.into(),
 			bit: 0.try_into().unwrap(),
@@ -229,6 +233,14 @@ fn test_assemble_every_instruction() {
 		Instruction::Lds {
 			register: R0,
 			address: 0x042.into(),
+		},
+		Instruction::St {
+			pointer_register: PointerRegister::X_POST_INC,
+			register: R0,
+		},
+		Instruction::Ld {
+			register: R0,
+			pointer_register: PointerRegister::X_PRE_DEC,
 		},
 		Instruction::Out {
 			address: 0x042.into(),

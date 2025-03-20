@@ -1,4 +1,7 @@
-use std::ops::{Add, AddAssign, Sub};
+use std::{
+	ops::{Add, AddAssign, Sub},
+	str::Chars,
+};
 
 use crate::{parse_number_operand, AsmOperand, AsmParseErrorType};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -183,7 +186,7 @@ macro_rules! define_register {
 
 		impl Register {
 			pub const COUNT: usize = 32;
-			pub const ALL: &[Self; Self::COUNT] = &[$(Self::$variant),+];
+			pub const ALL: &'static [Self; Self::COUNT] = &[$(Self::$variant),+];
 		}
 	};
 }
@@ -310,6 +313,196 @@ impl LowerEvenRegister {
 			Self::R28 => Register::R29,
 			Self::R30 => Register::R31,
 		}
+	}
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Ord, SelfRustTokenize)]
+#[repr(u8)]
+pub enum PointerRegisterAction {
+	#[default]
+	Unchanged,
+	PostIncrement,
+	PreDecrement,
+}
+impl PointerRegisterAction {
+	/// returns the pointer value that will be used to access data space:
+	/// if self is PreDecrement: current_pointer_value - 1
+	/// else: current_pointer_value
+	pub fn get_data_space_access_pointer_value(&self, current_pointer_value: u16) -> u16 {
+		match self {
+			Self::PreDecrement => current_pointer_value - 1,
+			_ => current_pointer_value,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Ord, SelfRustTokenize)]
+#[repr(u8)]
+pub enum PointerRegister {
+	X { action: PointerRegisterAction },
+	Y { action: PointerRegisterAction },
+	Z { action: PointerRegisterAction },
+}
+impl PointerRegister {
+	pub const X: Self = Self::X {
+		action: PointerRegisterAction::Unchanged,
+	};
+	/// -X
+	pub const X_PRE_DEC: Self = Self::X {
+		action: PointerRegisterAction::PreDecrement,
+	};
+	/// X+
+	pub const X_POST_INC: Self = Self::X {
+		action: PointerRegisterAction::PostIncrement,
+	};
+	pub const Y: Self = Self::Y {
+		action: PointerRegisterAction::Unchanged,
+	};
+	/// -Y
+	pub const Y_PRE_DEC: Self = Self::Y {
+		action: PointerRegisterAction::PreDecrement,
+	};
+	/// Y+
+	pub const Y_POST_INC: Self = Self::Y {
+		action: PointerRegisterAction::PostIncrement,
+	};
+	pub const Z: Self = Self::Z {
+		action: PointerRegisterAction::Unchanged,
+	};
+	/// -Z
+	pub const Z_PRE_DEC: Self = Self::Z {
+		action: PointerRegisterAction::PreDecrement,
+	};
+	/// Z+
+	pub const Z_POST_INC: Self = Self::Z {
+		action: PointerRegisterAction::PostIncrement,
+	};
+
+	pub fn action(&self) -> PointerRegisterAction {
+		match self {
+			PointerRegister::X { action } => *action,
+			PointerRegister::Y { action } => *action,
+			PointerRegister::Z { action } => *action,
+		}
+	}
+	pub fn set_action(&mut self, action: PointerRegisterAction) {
+		match self {
+			PointerRegister::X { action: ref mut a } => *a = action,
+			PointerRegister::Y { action: ref mut a } => *a = action,
+			PointerRegister::Z { action: ref mut a } => *a = action,
+		}
+	}
+
+	pub fn get_higher_uneven_register(self) -> Register {
+		let lower_even_register: LowerEvenRegister = self.into();
+		lower_even_register.get_higher_uneven_register()
+	}
+}
+impl From<PointerRegister> for LowerEvenRegister {
+	fn from(value: PointerRegister) -> Self {
+		match value {
+			PointerRegister::X { .. } => LowerEvenRegister::R26,
+			PointerRegister::Y { .. } => LowerEvenRegister::R28,
+			PointerRegister::Z { .. } => LowerEvenRegister::R30,
+		}
+	}
+}
+impl From<PointerRegister> for Register {
+	fn from(value: PointerRegister) -> Self {
+		let lower_even_register: LowerEvenRegister = value.into();
+		lower_even_register.into()
+	}
+}
+impl std::fmt::Display for PointerRegister {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let action = self.action();
+
+		write!(
+			f,
+			"{}{}{}",
+			if matches!(action, PointerRegisterAction::PreDecrement) {
+				"-"
+			} else {
+				""
+			},
+			match self {
+				Self::X { .. } => 'X',
+				Self::Y { .. } => 'Y',
+				Self::Z { .. } => 'Z',
+			},
+			if matches!(action, PointerRegisterAction::PostIncrement) {
+				"+"
+			} else {
+				""
+			},
+		)
+	}
+}
+impl AsmOperand for PointerRegister {
+	fn parse_operand(operand: &str) -> Result<PointerRegister, AsmParseErrorType> {
+		fn parse_operand_char(
+			operand: &str,
+			chars: &mut Chars,
+			action: &mut Option<PointerRegisterAction>,
+			pointer_register: &mut Option<PointerRegister>,
+		) -> Result<PointerRegister, AsmParseErrorType> {
+			match chars.next().map(|c| c.to_ascii_uppercase()) {
+				Some('-') => {
+					if action.is_some() || pointer_register.is_some() {
+						return Err(AsmParseErrorType::InvalidPointerRegister(
+							operand.to_string(),
+						));
+					}
+					*action = Some(PointerRegisterAction::PreDecrement);
+					parse_operand_char(operand, chars, action, pointer_register)
+				}
+				Some('+') => {
+					if action.is_some() || pointer_register.is_none() {
+						return Err(AsmParseErrorType::InvalidPointerRegister(
+							operand.to_string(),
+						));
+					}
+					*action = Some(PointerRegisterAction::PostIncrement);
+					parse_operand_char(operand, chars, action, pointer_register)
+				}
+				Some('X') => {
+					*pointer_register = Some(PointerRegister::X {
+						action: action.unwrap_or_default(),
+					});
+					parse_operand_char(operand, chars, action, pointer_register)
+				}
+				Some('Y') => {
+					*pointer_register = Some(PointerRegister::Y {
+						action: action.unwrap_or_default(),
+					});
+					parse_operand_char(operand, chars, action, pointer_register)
+				}
+				Some('Z') => {
+					*pointer_register = Some(PointerRegister::Z {
+						action: action.unwrap_or_default(),
+					});
+					parse_operand_char(operand, chars, action, pointer_register)
+				}
+				Some(_) => Err(AsmParseErrorType::InvalidPointerRegister(
+					operand.to_string(),
+				)),
+				None => match pointer_register {
+					Some(pointer_register) => Ok({
+						pointer_register.set_action(action.unwrap_or_default());
+						*pointer_register
+					}),
+					_ => Err(AsmParseErrorType::InvalidPointerRegister(
+						operand.to_string(),
+					)),
+				},
+			}
+		}
+
+		let mut chars = operand.chars();
+		let mut action = None;
+		let mut pointer_register = None;
+
+		parse_operand_char(operand, &mut chars, &mut action, &mut pointer_register)
 	}
 }
 

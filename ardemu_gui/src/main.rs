@@ -6,7 +6,7 @@
 
 use ardemu_core::{
 	assemble, load_elf, load_ihex_str, AsmParseError, Cpu, CpuStatus, FlagType, Imm16, Imm8,
-	Program,
+	PointerRegister, Program,
 	Register::{self, R9},
 	WordAddress,
 };
@@ -58,6 +58,7 @@ enum CodeSample {
 	RustFibIHex,
 	RustFibElf,
 	BlinkLED,
+	EmptyArduinoSketch,
 }
 impl CodeSample {
 	const ALL: &'static [CodeSample] = &[
@@ -67,6 +68,7 @@ impl CodeSample {
 		CodeSample::RustFibIHex,
 		CodeSample::RustFibElf,
 		CodeSample::BlinkLED,
+		CodeSample::EmptyArduinoSketch,
 	];
 
 	fn get_source_code(&self) -> String {
@@ -87,6 +89,10 @@ impl CodeSample {
 				include_str!("../../sample_programs/rust_fib.asm").to_string()
 			}
 			Self::BlinkLED => include_str!("../../sample_programs/blink.asm").to_string(),
+			Self::EmptyArduinoSketch => include_str!(
+				"../../sample_programs/empty_arduino_sketch/empty_arduino_sketch.ino.asm"
+			)
+			.to_string(),
 		}
 	}
 
@@ -99,6 +105,10 @@ impl CodeSample {
 			Self::RustFibElf => {
 				load_elf(include_bytes!("../../sample_programs/rust_fib.elf")).unwrap()
 			}
+			Self::EmptyArduinoSketch => load_elf(include_bytes!(
+				"../../sample_programs/empty_arduino_sketch/empty_arduino_sketch.ino.elf"
+			))
+			.unwrap(),
 			_ => assemble(&self.get_source_code()).unwrap(),
 		}
 	}
@@ -115,6 +125,7 @@ impl std::fmt::Display for CodeSample {
 				Self::RustFibIHex => "Rust Fib (.hex)",
 				Self::RustFibElf => "Rust Fib (.elf)",
 				Self::BlinkLED => "Blink LED",
+				Self::EmptyArduinoSketch => "Empty Arduino Sketch",
 			}
 		)
 	}
@@ -627,9 +638,12 @@ impl App {
 	const BYTES_PER_ROW: u32 = 16;
 	fn memory_pane<'a>(&'a self, cpu: &'a Cpu, portrait: bool) -> Element<'a, Message> {
 		let referenced_memory_address_range = match cpu.get_current_instruction() {
-			Some(instruction) => {
-				instruction.get_referenced_memory_address_range(cpu.get_stack_pointer())
-			}
+			Some(instruction) => instruction.get_referenced_memory_address_range(
+				cpu.get_stack_pointer(),
+				cpu.read_register_pair16(PointerRegister::X),
+				cpu.read_register_pair16(PointerRegister::Y),
+				cpu.read_register_pair16(PointerRegister::Z),
+			),
 			None => None,
 		};
 

@@ -1,6 +1,6 @@
 use crate::{
-	AsmOperand, FlagType, Imm16, Imm3, Imm8, LowerEvenRegister, Register, RegisterAddress,
-	UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
+	AsmOperand, FlagType, Imm16, Imm3, Imm8, LowerEvenRegister, PointerRegister, Register,
+	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
 use ardemu_instruction_helper_macro::{
 	DisplayInstruction, ParseAsmInstruction, ReferencedRegisters,
@@ -155,6 +155,9 @@ pub enum Instruction {
 	/// ; basically
 	/// PC = pop()
 	Ret,
+	/// return from interrupt
+	/// same as ret but also enables the interrupt flag
+	Reti,
 	/// call subroutine relative to current address
 	#[skip_parse_asm_instruction]
 	RCall { word_offset: WordOffset16 },
@@ -220,7 +223,6 @@ pub enum Instruction {
 		value: Imm8,
 	},
 	/// set cpu flag
-	/// (same as CLI when flag_type is FlagType::Interrupt)
 	Bset { flag_type: FlagType },
 	/// clear cpu flag
 	Bclr { flag_type: FlagType },
@@ -242,36 +244,40 @@ pub enum Instruction {
 	Sts { address: Imm16, register: Register },
 	/// load value from sram address into register
 	Lds { register: Register, address: Imm16 },
+	/// Store indirect from register to Data Space using pointer register (X, Y, Z) as memory address
+	// TODO: implement STD (ST with a 6-bit displacement added to pointer value)
+	St {
+		pointer_register: PointerRegister,
+		register: Register,
+	},
+	/// Load indirect from Data Space using pointer register (X, Y, Z)  as memory address to register
+	// TODO: implement LDD (LD with a 6-bit displacement added to pointer value)
+	Ld {
+		register: Register,
+		pointer_register: PointerRegister,
+	},
 	/// load value from sram address into register
 	In { register: Register, address: Imm8 },
 	/// store value of register into sram address
 	Out { address: Imm8, register: Register },
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum MemoryAddressRange {
-	SingleByte(u32),
-	// 1 word = 2 bytes
-	SingleWord(u32),
-}
-
-impl MemoryAddressRange {
-	/// Checks if the given address is included in the range.
-	pub fn includes_address(&self, address: u32) -> bool {
-		match self {
-			MemoryAddressRange::SingleByte(address_range) => address == *address_range,
-			MemoryAddressRange::SingleWord(address_range) => {
-				//										- 1, since the stack grows backwards
-				address == *address_range || address == *address_range - 1
-			}
-		}
-	}
-}
-
 impl Instruction {
+	/// alias for bset 7 ; set interrupt flag
+	pub const SEI: Self = Self::Bset {
+		flag_type: FlagType::Interrupt,
+	};
+	/// alias for bclr 7 ; clear interrupt flag
+	pub const CLI: Self = Self::Bclr {
+		flag_type: FlagType::Interrupt,
+	};
+
 	pub fn get_referenced_memory_address_range(
 		&self,
 		stack_pointer: u16,
+		x_pointer_value: u16,
+		y_pointer_value: u16,
+		z_pointer_value: u16,
 	) -> Option<MemoryAddressRange> {
 		match self {
 			Self::Sts { address, .. } => Some(MemoryAddressRange::SingleByte(address.0 as u32)),
@@ -283,6 +289,33 @@ impl Instruction {
 			Self::Call { .. } => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
 			Self::RCall { .. } => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
 			Self::Ret => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
+			Self::Reti => Some(MemoryAddressRange::SingleWord(stack_pointer as u32)),
+			Self::St {
+				pointer_register, ..
+			} => Some(MemoryAddressRange::SingleByte(match pointer_register {
+				PointerRegister::X { action } => {
+					action.get_data_space_access_pointer_value(x_pointer_value) as u32
+				}
+				PointerRegister::Y { action } => {
+					action.get_data_space_access_pointer_value(y_pointer_value) as u32
+				}
+				PointerRegister::Z { action } => {
+					action.get_data_space_access_pointer_value(z_pointer_value) as u32
+				}
+			})),
+			Self::Ld {
+				pointer_register, ..
+			} => Some(MemoryAddressRange::SingleByte(match pointer_register {
+				PointerRegister::X { action } => {
+					action.get_data_space_access_pointer_value(x_pointer_value) as u32
+				}
+				PointerRegister::Y { action } => {
+					action.get_data_space_access_pointer_value(y_pointer_value) as u32
+				}
+				PointerRegister::Z { action } => {
+					action.get_data_space_access_pointer_value(z_pointer_value) as u32
+				}
+			})),
 			_ => None,
 		}
 	}
@@ -301,7 +334,7 @@ impl Instruction {
 					.wrapping_add_signed(word_offset)
 					.wrapping_add_signed(1),
 			),
-			Self::Ret => {
+			Self::Ret | Self::Reti => {
 				if is_currently_executing {
 					Some(return_address_in_stack)
 				} else {
@@ -339,6 +372,26 @@ impl Instruction {
 					.wrapping_add_signed(1),
 			),
 			_ => None,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MemoryAddressRange {
+	SingleByte(u32),
+	// 1 word = 2 bytes
+	SingleWord(u32),
+}
+
+impl MemoryAddressRange {
+	/// Checks if the given address is included in the range.
+	pub fn includes_address(&self, address: u32) -> bool {
+		match self {
+			MemoryAddressRange::SingleByte(address_range) => address == *address_range,
+			MemoryAddressRange::SingleWord(address_range) => {
+				//										- 1, since the stack grows backwards
+				address == *address_range || address == *address_range - 1
+			}
 		}
 	}
 }

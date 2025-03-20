@@ -1,8 +1,8 @@
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use crate::{
-	get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16, CpuError, Flags, Instruction,
-	LowerEvenRegister, Opcode, Program, Register, WordAddress,
+	get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16, CpuError, FlagType, Flags,
+	Instruction, LowerEvenRegister, Opcode, PointerRegisterAction, Program, Register, WordAddress,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -412,7 +412,13 @@ impl Cpu {
 			}
 			Instruction::Ret => {
 				self.program_counter = self.pop_address()?;
-				// Call is 4 cycles
+				// Ret is 4 cycles
+				cycles += 3;
+			}
+			Instruction::Reti => {
+				self.program_counter = self.pop_address()?;
+				self.flags.set(FlagType::Interrupt);
+				// Reti is 4 cycles
 				cycles += 3;
 			}
 			Instruction::RCall { word_offset } => {
@@ -566,6 +572,46 @@ impl Cpu {
 				self.write_register(register, self.read_ram(address.0)?);
 				self.program_counter += instruction.get_word_size();
 				// lds is 2 cycles
+				cycles += 1;
+			}
+			Instruction::St {
+				pointer_register,
+				register,
+			} => {
+				let action = pointer_register.action();
+
+				let mut pointer_value = self.read_register_pair16(pointer_register);
+				if let PointerRegisterAction::PreDecrement = action {
+					pointer_value -= 1;
+				}
+				self.write_ram(pointer_value, self.read_register(register))?;
+				if let PointerRegisterAction::PostIncrement = action {
+					pointer_value += 1;
+				}
+				self.write_register_pair16(pointer_register, pointer_value);
+
+				self.program_counter += 1;
+				// st is 2 cycles
+				cycles += 1;
+			}
+			Instruction::Ld {
+				register,
+				pointer_register,
+			} => {
+				let action = pointer_register.action();
+
+				let mut pointer_value = self.read_register_pair16(pointer_register);
+				if let PointerRegisterAction::PreDecrement = action {
+					pointer_value -= 1;
+				}
+				self.write_register(register, self.read_ram(pointer_value)?);
+				if let PointerRegisterAction::PostIncrement = action {
+					pointer_value += 1;
+				}
+				self.write_register_pair16(pointer_register, pointer_value);
+
+				self.program_counter += 1;
+				// ld is 2 cycles
 				cycles += 1;
 			}
 			Instruction::Out { address, register } => {

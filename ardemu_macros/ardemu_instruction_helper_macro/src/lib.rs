@@ -153,6 +153,7 @@ fn is_any_regsiter_type(ty: &syn::Type) -> bool {
 		|| is_register_address_type(ty)
 		|| is_word_register_type(ty)
 		|| is_lower_even_register_type(ty)
+		|| is_pointer_register_type(ty)
 }
 fn is_register_type(ty: &syn::Type) -> bool {
 	ty == &syn::parse_str::<syn::Type>("Register").unwrap()
@@ -168,6 +169,9 @@ fn is_word_register_type(ty: &syn::Type) -> bool {
 }
 fn is_lower_even_register_type(ty: &syn::Type) -> bool {
 	ty == &syn::parse_str::<syn::Type>("LowerEvenRegister").unwrap()
+}
+fn is_pointer_register_type(ty: &syn::Type) -> bool {
+	ty == &syn::parse_str::<syn::Type>("PointerRegister").unwrap()
 }
 
 fn parse_registers(
@@ -246,6 +250,16 @@ pub fn referenced_registers_derive(input: TokenStream) -> TokenStream {
 		parse_registers(
 			fields,
 			is_lower_even_register_type,
+			|ident| {
+				quote! {
+					(*#ident).into(), #ident.get_higher_uneven_register()
+				}
+			},
+			&mut registers,
+		);
+		parse_registers(
+			fields,
+			is_pointer_register_type,
 			|ident| {
 				quote! {
 					(*#ident).into(), #ident.get_higher_uneven_register()
