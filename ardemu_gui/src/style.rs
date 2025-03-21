@@ -89,6 +89,15 @@ pub fn background_style(_theme: &Theme) -> container::Style {
 	}
 }
 
+pub fn secondary_container_style(theme: &Theme) -> container::Style {
+	container::Style {
+		background: Some(theme.extended_palette().secondary.base.color.into()),
+		text_color: Some(theme.extended_palette().secondary.base.text),
+		border: rounded(8),
+		..Default::default()
+	}
+}
+
 /// sets text color to primary theme color
 pub fn primary_text_style(theme: &Theme) -> text::Style {
 	text::Style {
