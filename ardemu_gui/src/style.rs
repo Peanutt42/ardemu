@@ -9,7 +9,7 @@ pub fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_edi
 	let palette = theme.extended_palette();
 
 	let active = text_editor::Style {
-		background: Color::from_rgb8(1, 4, 9).into(),
+		background: Color::from_rgb8(5, 5, 5).into(),
 		border: Border {
 			radius: 8.0.into(),
 			width: 0.0,
@@ -74,7 +74,7 @@ pub fn hidden_secondary_button_style(theme: &Theme, status: button::Status) -> b
 
 pub fn panel_style(_theme: &Theme) -> container::Style {
 	container::Style {
-		background: Some(Color::from_rgb8(1, 4, 9).into()),
+		background: Some(Color::from_rgb8(5, 5, 5).into()),
 		text_color: Some(Color::WHITE),
 		border: rounded(8),
 		..Default::default()
@@ -83,7 +83,7 @@ pub fn panel_style(_theme: &Theme) -> container::Style {
 
 pub fn background_style(_theme: &Theme) -> container::Style {
 	container::Style {
-		background: Some(Color::from_rgb8(5, 9, 21).into()),
+		background: Some(Color::from_rgb8(17, 17, 17).into()),
 		text_color: Some(Color::WHITE),
 		..Default::default()
 	}

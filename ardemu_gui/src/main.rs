@@ -659,7 +659,7 @@ impl App {
 	}
 
 	fn arduino_board_panel(&self, cpu: &Cpu) -> Element<Message> {
-		column![
+		container(column![
 			text!(
 				"Builtin LED: {}",
 				if cpu.is_builtin_led_on() {
@@ -671,7 +671,9 @@ impl App {
 			svg(ARDUINO_UNO_SVG.clone())
 				.width(FillPortion(2))
 				.height(Fill)
-		]
+		])
+		.style(panel_style)
+		.padding(10)
 		.into()
 	}
 
@@ -970,7 +972,6 @@ impl App {
 				flags_panel,
 				memory_panel,
 			]
-			.padding(10)
 			.spacing(20)
 			.height(FillPortion(1))
 			.into()
@@ -981,7 +982,6 @@ impl App {
 					.spacing(20)
 					.height(Fill),
 			]
-			.padding(10)
 			.spacing(20)
 			.height(FillPortion(1))
 			.into()
