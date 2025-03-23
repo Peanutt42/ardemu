@@ -75,7 +75,7 @@ struct AsmSyntax {
 static ASM_SYNTAX: LazyLock<AsmSyntax> = LazyLock::new(|| {
 	let mut builder = SyntaxSetBuilder::new();
 	let definition = SyntaxDefinition::load_from_str(
-		include_str!("assembly.sublime-syntax"),
+		include_str!("../assets/assembly.sublime-syntax"),
 		false,
 		Some("asm"),
 	);

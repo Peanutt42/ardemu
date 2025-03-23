@@ -17,7 +17,7 @@ use iced::{
 	widget::{
 		button, checkbox, column, container, mouse_area, pick_list, responsive, row, scrollable,
 		scrollable::{Direction, Scrollbar},
-		svg, text, text_editor,
+		stack, svg, text, text_editor,
 		text_editor::Content,
 		text_input, tooltip,
 		tooltip::Position,
@@ -51,7 +51,7 @@ mod code_editor;
 use code_editor::unindent_text;
 
 mod assets;
-use assets::ARDUINO_UNO_SVG;
+use assets::{ARDUINO_UNO_LED_BUILTIN_ON_SVG, ARDUINO_UNO_LED_POWER_ON_SVG, ARDUINO_UNO_SVG};
 
 mod arduino_sketch;
 
@@ -659,19 +659,35 @@ impl App {
 	}
 
 	fn arduino_board_panel(&self, cpu: &Cpu) -> Element<Message> {
-		container(column![
-			text!(
-				"Builtin LED: {}",
-				if cpu.is_builtin_led_on() {
-					"HIGH"
-				} else {
-					"LOW"
-				}
-			),
-			svg(ARDUINO_UNO_SVG.clone())
+		container(
+			stack![svg(ARDUINO_UNO_SVG.clone())
 				.width(FillPortion(2))
-				.height(Fill)
-		])
+				.height(Fill)]
+			.push_maybe(if cpu.is_builtin_led_on() {
+				Some(
+					svg(ARDUINO_UNO_LED_BUILTIN_ON_SVG.clone())
+						.style(|_, _| svg::Style {
+							color: Some(Color::from_rgb(1.0, 1.0, 0.0)),
+						})
+						.width(FillPortion(2))
+						.height(Fill),
+				)
+			} else {
+				None
+			})
+			.push_maybe(if self.simulate_cpu {
+				Some(
+					svg(ARDUINO_UNO_LED_POWER_ON_SVG.clone())
+						.style(|_, _| svg::Style {
+							color: Some(Color::from_rgb(0.0, 1.0, 0.0)),
+						})
+						.width(FillPortion(2))
+						.height(Fill),
+				)
+			} else {
+				None
+			}),
+		)
 		.style(panel_style)
 		.padding(10)
 		.into()

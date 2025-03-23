@@ -3986,6 +3986,10 @@
   </g>
   <g style="fill:none;stroke:#000000;stroke-width:2.99599004;stroke-linecap:round" x2="35.687" y2="76.004" x1="35.687" y1="67.749" id="connector0leg" transform="translate(65.015849,-89.502402)"/>
   <g style="fill:none;stroke:#ff0000;stroke-width:2.99599004;stroke-linecap:round" x2="42.928" y2="76.004" x1="42.928" y1="67.749" id="connector1leg" transform="translate(65.015849,-89.502402)"/>
-  <rect style="fill:#ffff00;fill-opacity:0.38297873;fill-rule:nonzero;stroke:none" id="rect23416" width="5.4546356" height="3.7905085" x="101.73392" y="40.261147"/>
-  <rect style="fill:#00ff00;fill-opacity:0.38297873;fill-rule:nonzero;stroke:none" id="rect23418" width="5.4556336" height="3.887923" x="191.1626" y="53.72448"/>
+
+  <!-- LED_BUILTIN -->
+  <!-- <rect style="fill:#ffff00;fill-opacity:0.38297873;fill-rule:nonzero;stroke:none" id="rect23416" width="5.4546356" height="3.7905085" x="101.73392" y="40.261147"/> -->
+
+  <!-- LED_POWER_ON -->
+  <!-- <rect style="fill:#00ff00;fill-opacity:0.38297873;fill-rule:nonzero;stroke:none" id="rect23418" width="5.4556336" height="3.887923" x="191.1626" y="53.72448"/> -->
 </svg>
