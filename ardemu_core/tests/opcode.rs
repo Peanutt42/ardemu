@@ -441,3 +441,55 @@ fn test_load_instructions_from_opcodes() {
 		},
 	);
 }
+
+// tests every supported 16 bit instruction and check that the reproducing opcode is the same
+#[test]
+fn test_get_opcode_from_16bit_instruction() {
+	for opcode_16bit in 0..u16::MAX {
+		let opcode_32_bit = (opcode_16bit as u32) << 16;
+
+		if let Some(instruction) = Instruction::load(opcode_32_bit) {
+			if instruction.is_32bit() {
+				continue;
+			}
+
+			let reproduced_opcode = instruction.get_opcode();
+			assert_eq!(
+				opcode_32_bit,
+				reproduced_opcode,
+				"expected: {opcode_16bit:#018b}, got: {:#018b} (instruction: {instruction})",
+				reproduced_opcode >> 16
+			);
+		}
+	}
+}
+
+#[test]
+fn test_get_opcode_from_32bit_instruction() {
+	fn test(opcode_32bit: u32) {
+		let instruction =
+			Instruction::load(opcode_32bit).expect("this opcode should be supported!");
+
+		assert!(instruction.is_32bit());
+
+		let produced_opcode_32bit = instruction.get_opcode();
+
+		assert_eq!(
+			opcode_32bit,
+			produced_opcode_32bit,
+			"expected: {opcode_32bit:#034b}, got: {produced_opcode_32bit:#034b}, (instruction: {instruction})"
+		);
+	}
+
+	// Instruction::Sts { address: 32768.into(), register: R31 }
+	test(0b1001_0011_1111_0000_1000_0000_0000_0000);
+
+	// Instruction::Lds { register: R31, address: 65535.into() }
+	test(0b1001_0001_1111_0000_1111_1111_1111_1111);
+
+	// Instruction::Jmp { word_address: WordAddress(0xffff) }
+	test(0b1001_0100_0000_1100_1111_1111_1111_1111);
+
+	// Instruction::Call { word_address: WordAddress(0x3FFF) }
+	test(0b1001_0100_0000_1110_0011_1111_1111_1111);
+}

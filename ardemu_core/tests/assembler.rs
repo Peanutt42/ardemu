@@ -70,7 +70,7 @@ fn test_assemble_every_instruction() {
 	)
 	.expect("failed to assemble test code");
 
-	let expected = Program::new(&[
+	let expected = Program::load_instruction_list(&[
 		Instruction::Nop {},
 		Instruction::Break {},
 		Instruction::Jmp {
@@ -254,7 +254,8 @@ fn test_assemble_every_instruction() {
 
 	assert_eq!(program.len(), expected.len());
 	for (program_address, instruction) in program.iter() {
-		let expected_instruction = expected.get(program_address).expect(
+		let instruction = instruction.expect("should be able to load that instruction");
+		let expected_instruction = expected.get_instruction(program_address).expect(
 			"invalid program address from assembled program, could not find in expected program",
 		);
 		assert_eq!(instruction, expected_instruction, "instruction in {program_address} should be {expected_instruction}, but is {instruction}");

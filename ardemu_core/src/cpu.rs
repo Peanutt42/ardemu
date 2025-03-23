@@ -96,7 +96,7 @@ impl Cpu {
 	}
 
 	pub fn get_current_instruction(&self) -> Option<Instruction> {
-		self.program.get(self.program_counter)
+		self.program.get_instruction(self.program_counter)
 	}
 
 	pub fn is_builtin_led_on(&self) -> bool {
@@ -339,11 +339,13 @@ impl Cpu {
 			}
 			Instruction::Cpse { reg_dest, reg_read } => {
 				if self.read_register(reg_dest) == self.read_register(reg_read) {
-					let next_instruction_word_size =
-						match self.program.get(self.get_program_counter() + 1u32) {
-							Some(next_instruction) => next_instruction.get_word_size(),
-							None => 1,
-						};
+					let next_instruction_word_size = match self
+						.program
+						.get_instruction(self.get_program_counter() + 1u32)
+					{
+						Some(next_instruction) => next_instruction.get_word_size(),
+						None => 1,
+					};
 					self.program_counter += 1 + next_instruction_word_size;
 				} else {
 					self.program_counter += 1;

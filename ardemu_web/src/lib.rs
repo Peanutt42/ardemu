@@ -7,7 +7,15 @@ pub fn evaluate(source_code: &str) -> String {
 		Ok(program) => (
 			program
 				.iter()
-				.map(|(program_address, instruction)| format!("{program_address}: {instruction}"))
+				.map(|(program_address, instruction)| {
+					format!(
+						"{program_address}: {}",
+						match instruction {
+							Some(instruction) => format!("{instruction}"),
+							None => "???".to_string(),
+						}
+					)
+				})
 				.collect::<Vec<String>>()
 				.join("\n"),
 			Cpu::new(program),

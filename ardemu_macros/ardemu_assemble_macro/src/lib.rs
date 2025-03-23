@@ -24,8 +24,7 @@ fn tokenize_debug_symbol_table(
 }
 
 fn tokenize_program(program: Program) -> proc_macro2::TokenStream {
-	let program_address_instruction_map_tokens =
-		program.program_address_instruction_map.to_tokens();
+	let flash_tokens = program.flash.to_tokens();
 	let debug_symbol_table_tokens = tokenize_debug_symbol_table(program.debug_symbol_table);
 
 	quote! {
@@ -33,7 +32,7 @@ fn tokenize_program(program: Program) -> proc_macro2::TokenStream {
 			use std::collections::HashMap;
 
 			Program {
-				program_address_instruction_map: #program_address_instruction_map_tokens,
+				flash: #flash_tokens,
 				debug_symbol_table: #debug_symbol_table_tokens,
 			}
 		}

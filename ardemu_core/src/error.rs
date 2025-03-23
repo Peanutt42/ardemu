@@ -70,11 +70,6 @@ pub enum AsmParseErrorType {
 
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
 pub enum LoadProgramError {
-	#[error("unsupported instruction: {opcode_32bit:032b} at address {program_address:04X}")]
-	UnsupportedInstruction {
-		opcode_32bit: u32,
-		program_address: u16,
-	},
 	#[error("invalid alignment! must be a multiple of 2 (16-bit)")]
 	InvalidAlignment,
 }

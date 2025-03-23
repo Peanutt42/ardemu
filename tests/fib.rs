@@ -25,7 +25,11 @@ fn test_fib_program(
 		let mut cpu = Cpu::new(program.clone());
 		cpu.write_register(n_register, n);
 
-		while matches!(cpu.step().unwrap(), CpuStatus::Normal) {}
+		while matches!(
+			cpu.step()
+				.unwrap_or_else(|e| panic!("{name} failed to step simulation: {e}")),
+			CpuStatus::Normal
+		) {}
 
 		let result = read_result_callback(&mut cpu);
 		let expected = testing_fib(n as usize);

@@ -317,13 +317,13 @@ pub fn assemble(asm: &str) -> Result<Program, AsmParseError> {
 		instructions.push(instruction);
 	}
 
+	// TODO: add '.db', etc. to assembler to embed data in flash memory
+	let flash = Program::load_instruction_list_as_flash(&instructions);
+
 	let debug_symbol_table = symbol_table
 		.into_iter()
 		.map(|(name, address)| (address, name))
 		.collect::<HashMap<WordAddress, String>>();
 
-	Ok(Program::with_debug_symbols(
-		&instructions,
-		debug_symbol_table,
-	))
+	Ok(Program::with_debug_symbols(flash, debug_symbol_table))
 }

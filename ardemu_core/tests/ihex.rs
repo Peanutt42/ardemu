@@ -92,7 +92,7 @@ fn load_fib_avr_rust_sample_hex_file() {
 				Instruction::RJmp { word_offset: WordOffset16(-1) /* -1 words = -2 bytes */ },
 			];
 
-			let expected_program = Program::new(&expected_instructions);
+			let expected_program = Program::load_instruction_list(&expected_instructions);
 
 			assert_eq!(
 				program.len(),
@@ -104,8 +104,8 @@ fn load_fib_avr_rust_sample_hex_file() {
 			for i in 0..program.len() {
 				let program_address = WordAddress(i as u32);
 				assert_eq!(
-					program.get(program_address),
-					expected_program.get(program_address)
+					program.get_instruction(program_address),
+					expected_program.get_instruction(program_address)
 				);
 			}
 		}

@@ -402,6 +402,10 @@ impl App {
 	}
 
 	fn editor_panel(&self) -> Element<Message> {
+		let compile_button_disabled =
+			matches!(self.source_code_language, SourceCodeLanguage::Arduino)
+				&& self.arduino_cli_filepath.is_none();
+
 		column![
 			row![
 				text("Code:  "),
@@ -418,16 +422,14 @@ impl App {
 				} else {
 					let compile_button: Element<Message> = button("Compile (Ctrl+B)")
 						.style(button_style)
-						.on_press_maybe(if self.arduino_cli_filepath.is_some() {
-							Some(Message::CompileProgram)
-						} else {
+						.on_press_maybe(if compile_button_disabled {
 							None
+						} else {
+							Some(Message::CompileProgram)
 						})
 						.into();
 
-					if self.arduino_cli_filepath.is_some() {
-						compile_button
-					} else {
+					if compile_button_disabled {
 						tooltip(
 							compile_button,
 							container(text("Set the Arduino CLI path!").size(16).color(RED))
@@ -436,6 +438,8 @@ impl App {
 							Position::Bottom,
 						)
 						.into()
+					} else {
+						compile_button
 					}
 				},
 			]
@@ -521,17 +525,23 @@ impl App {
 									let instr_currently_executing =
 										program_counter == program_address;
 									let debug_symbol = program.get_debug_symbol(program_address);
-									let referenced_debug_symbol = instruction
-										.get_referenced_program_address(
-											program_address,
-											potential_return_address,
-											instr_currently_executing,
-										)
-										.and_then(|referenced_program_address| {
-											let symbol = program
-												.get_debug_symbol(referenced_program_address)?;
+									let referenced_debug_symbol =
+										instruction.and_then(|instruction| {
+											instruction
+												.get_referenced_program_address(
+													program_address,
+													potential_return_address,
+													instr_currently_executing,
+												)
+												.and_then(|referenced_program_address| {
+													let symbol = program.get_debug_symbol(
+														referenced_program_address,
+													)?;
 
-											Some(format!("{referenced_program_address}: {symbol}"))
+													Some(format!(
+														"{referenced_program_address}: {symbol}"
+													))
+												})
 										});
 									let debug_info = match (debug_symbol, referenced_debug_symbol) {
 										(Some(debug_symbol), Some(referenced_debug_symbol)) => {
@@ -584,13 +594,16 @@ impl App {
 											}
 										),
 										row![
-											text!("{instruction}")
-												.font(Font::MONOSPACE)
-												.color_maybe(if instr_currently_executing {
-													Some(Color::from_rgb(1.0, 0.0, 0.0))
-												} else {
-													None
-												}),
+											match instruction {
+												Some(instruction) => text!("{instruction}"),
+												None => text("???"),
+											}
+											.font(Font::MONOSPACE)
+											.color_maybe(if instr_currently_executing {
+												Some(Color::from_rgb(1.0, 0.0, 0.0))
+											} else {
+												None
+											}),
 											text(debug_info)
 												.font(Font::MONOSPACE)
 												.style(secondary_text_style)

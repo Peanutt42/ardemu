@@ -3,7 +3,7 @@ use std::fmt::Display;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use self_rust_tokenize::SelfRustTokenize;
 
-use crate::{AsmOperand, AsmParseErrorType};
+use crate::{AsmOperand, AsmParseErrorType, Imm3};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Flags {
@@ -266,6 +266,19 @@ impl FlagType {
 			Self::HalfCarry => 'H',
 			Self::BitCopy => 'T',
 			Self::Interrupt => 'I',
+		}
+	}
+
+	pub fn as_imm3(&self) -> Imm3 {
+		match self {
+			Self::Carry => Imm3(0),
+			Self::Zero => Imm3(1),
+			Self::Negative => Imm3(2),
+			Self::Overflow => Imm3(3),
+			Self::Sign => Imm3(4),
+			Self::HalfCarry => Imm3(5),
+			Self::BitCopy => Imm3(6),
+			Self::Interrupt => Imm3(7),
 		}
 	}
 }

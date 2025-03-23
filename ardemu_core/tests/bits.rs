@@ -2,9 +2,10 @@ use ardemu_core::{get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16};
 
 #[test]
 fn test_u16_u8s_conversion() {
-	let value_16 = 60000;
-	let [low, high] = u8s_from_u16(value_16);
-	assert_eq!(value_16, u8s_to_u16(low, high));
+	for value_16bit in 0..u16::MAX {
+		let [low, high] = u8s_from_u16(value_16bit);
+		assert_eq!(value_16bit, u8s_to_u16(low, high));
+	}
 }
 
 #[test]

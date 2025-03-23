@@ -1,4 +1,4 @@
-; Disassembled instructions from rust_fib.elf
+
 ./rust_fib.elf:     file format elf32-avr
 
 

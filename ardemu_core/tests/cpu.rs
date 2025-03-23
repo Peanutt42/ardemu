@@ -82,7 +82,7 @@ fn test_breakpoint() {
 			value: 42.into(),
 		},
 	];
-	let mut cpu = Cpu::new(Program::new(&instructions));
+	let mut cpu = Cpu::new(Program::load_instruction_list(&instructions));
 	cpu.add_breakpoint(WordAddress(2));
 	assert_eq!(cpu.step(), Ok(CpuStatus::Normal));
 	assert_eq!(cpu.step(), Ok(CpuStatus::Normal));

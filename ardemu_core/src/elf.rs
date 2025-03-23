@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use elf::{endian::AnyEndian, ElfBytes};
 
-use crate::{Instruction, LoadElfError, Program, WordAddress};
+use crate::{LoadElfError, Program, WordAddress};
 
 /// returns (section_header_index, instructions)
-fn load_instructions(elf: &ElfBytes<AnyEndian>) -> Result<(usize, Vec<Instruction>), LoadElfError> {
+fn load_instructions(elf: &ElfBytes<AnyEndian>) -> Result<(usize, Vec<u16>), LoadElfError> {
 	match elf.section_headers_with_strtab()? {
 		(Some(shdrs), Some(strtab)) => {
 			for (section_index, section) in shdrs.iter().enumerate() {
@@ -16,8 +16,8 @@ fn load_instructions(elf: &ElfBytes<AnyEndian>) -> Result<(usize, Vec<Instructio
 						}
 
 						return match elf.section_data(&section) {
-							Ok((code, None)) => {
-								Ok((section_index, Program::load_instructions(code)?))
+							Ok((flash_binary, None)) => {
+								Ok((section_index, Program::load_flash_binary(flash_binary)?))
 							}
 							Ok((_code, Some(_compression_header))) => {
 								Err(LoadElfError::CompressedNotSupported)
@@ -80,12 +80,9 @@ fn load_debug_symbol_table(
 pub fn load_elf(elf_content: &[u8]) -> Result<Program, LoadElfError> {
 	let elf = ElfBytes::<AnyEndian>::minimal_parse(elf_content)?;
 
-	let (code_section_index, instructions) = load_instructions(&elf)?;
+	let (code_section_index, flash) = load_instructions(&elf)?;
 
 	let debug_symbol_table = load_debug_symbol_table(&elf, code_section_index);
 
-	Ok(Program::with_debug_symbols(
-		&instructions,
-		debug_symbol_table,
-	))
+	Ok(Program::with_debug_symbols(flash, debug_symbol_table))
 }

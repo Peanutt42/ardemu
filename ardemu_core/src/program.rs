@@ -1,94 +1,88 @@
 use std::collections::HashMap;
 
-use crate::{Instruction, LoadProgramError, Opcode, WordAddress};
+use crate::{u8s_to_u16, Instruction, LoadProgramError, Opcode, WordAddress};
 
-/// Stores map of program address in words and instructions
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
-	/// program is a list of instructions where the index is the word program address
-	/// -> None -> previous instruction is 32-bit
-	pub program_address_instruction_map: Vec<Option<Instruction>>,
+	/// every index is the program address in words (2 bytes!)
+	pub flash: Vec<u16>,
 	pub debug_symbol_table: HashMap<WordAddress, String>,
 }
 
 impl Program {
-	pub fn new(instructions: &[Instruction]) -> Self {
-		Self::with_debug_symbols(instructions, HashMap::new())
+	pub fn new(flash: Vec<u16>) -> Self {
+		Self::with_debug_symbols(flash, HashMap::new())
 	}
 
 	pub fn with_debug_symbols(
-		instructions: &[Instruction],
+		flash: Vec<u16>,
 		debug_symbol_table: HashMap<WordAddress, String>,
 	) -> Self {
-		let mut program_address_instruction_map = Vec::with_capacity(instructions.len());
-		for instruction in instructions {
-			let is_32bit = instruction.is_32bit();
-			program_address_instruction_map.push(Some(*instruction));
-			if is_32bit {
-				program_address_instruction_map.push(None);
-			}
-		}
-
 		Self {
-			program_address_instruction_map,
+			flash,
 			debug_symbol_table,
 		}
 	}
 
-	pub fn load_instructions(code: &[u8]) -> Result<Vec<Instruction>, LoadProgramError> {
+	pub fn load_instruction_list(instructions: &[Instruction]) -> Self {
+		Self::new(Self::load_instruction_list_as_flash(instructions))
+	}
+
+	pub fn load_instruction_list_as_flash(instructions: &[Instruction]) -> Vec<u16> {
+		let mut flash = Vec::<u16>::with_capacity(instructions.len());
+		for instruction in instructions {
+			let opcode = instruction.get_opcode();
+
+			let first_opcode = (opcode >> 16) as u16;
+			let second_opcode = (opcode & 0xFFFF) as u16;
+			if instruction.is_32bit() {
+				flash.push(first_opcode);
+				flash.push(second_opcode);
+			} else {
+				flash.push(first_opcode);
+				assert_eq!(second_opcode, 0, "{instruction}");
+			}
+		}
+		flash
+	}
+
+	/// loads flash (u16's) from binary (u8's)
+	pub fn load_flash_binary(code: &[u8]) -> Result<Vec<u16>, LoadProgramError> {
 		if code.len() % 2 != 0 {
 			return Err(LoadProgramError::InvalidAlignment);
 		}
 
-		let mut program_address = 0;
-		let mut instructions = Vec::new();
-		while program_address + std::mem::size_of::<u16>() <= code.len() {
-			let first_opcode_16bit =
-				u16::from_le_bytes([code[program_address], code[program_address + 1]]);
-
-			let opcode_32bit = if code.len() > program_address + std::mem::size_of::<u32>() {
-				let second_opcode_16bit =
-					u16::from_le_bytes([code[program_address + 2], code[program_address + 3]]);
-
-				((first_opcode_16bit as u32) << 16) | (second_opcode_16bit as u32)
-			} else {
-				(first_opcode_16bit as u32) << 16
-			};
-
-			match Instruction::load(opcode_32bit) {
-				Some(instruction) => {
-					program_address += instruction.get_byte_size() as usize;
-					instructions.push(instruction);
-				}
-				None => {
-					return Err(LoadProgramError::UnsupportedInstruction {
-						opcode_32bit,
-						program_address: program_address as u16,
-					})
-				}
-			}
+		let mut flash = Vec::with_capacity(code.len() / 2);
+		for i in 0..code.len() / 2 {
+			let low = code[i * 2];
+			let high = code[i * 2 + 1];
+			let word = u8s_to_u16(low, high);
+			flash.push(word);
 		}
-
-		Ok(instructions)
+		Ok(flash)
 	}
 
-	/// returns the instructions, as if all where only 16-bit
+	/// returns the flash size in words
 	/// 32-bit instructions are two 16-bit (1 word) instruction spots: [Some(Instruction::A64BitInstr), None]
-	/// this allows us to easily index with a program address (words)
 	pub fn len(&self) -> usize {
-		self.program_address_instruction_map.len()
+		self.flash.len()
 	}
 	pub fn is_empty(&self) -> bool {
-		self.program_address_instruction_map.is_empty()
+		self.flash.is_empty()
 	}
 
 	/// returns None if the program address is out of bounds or
 	/// if the program address is invalid, pointing at the second word of a 32-bit instruction
-	pub fn get(&self, address: WordAddress) -> Option<Instruction> {
-		self.program_address_instruction_map
-			.get(address.0 as usize)
-			.copied()
-			.and_then(|opt_instruction| opt_instruction)
+	pub fn get_instruction(&self, address: WordAddress) -> Option<Instruction> {
+		let first_opcode_16bit = self.flash.get(address.0 as usize)?;
+		let opcode_32bit = match self.flash.get(address.0 as usize + 1) {
+			Some(second_opcode_16bit) => {
+				((*first_opcode_16bit as u32) << 16) | (*second_opcode_16bit as u32)
+			}
+			None => (*first_opcode_16bit as u32) << 16,
+		};
+
+		Instruction::load(opcode_32bit)
 	}
 
 	pub fn iter(&self) -> ProgramIter {
@@ -107,14 +101,16 @@ impl Program {
 	/// returns None if the address is invalid
 	pub fn get_instruction_index(&self, address: WordAddress) -> Option<usize> {
 		let mut instruction_index = 0;
-		for (program_address, instruction) in
-			self.program_address_instruction_map.iter().enumerate()
-		{
-			if WordAddress(program_address as u32) == address {
+		let mut program_address = WordAddress(0);
+		while (program_address.0 as usize) < self.flash.len() {
+			if program_address == address {
 				return Some(instruction_index);
 			}
-			if instruction.is_some() {
+			if let Some(instruction) = self.get_instruction(program_address) {
 				instruction_index += 1;
+				program_address += instruction.get_word_size();
+			} else {
+				program_address += 1;
 			}
 		}
 		None
@@ -123,7 +119,7 @@ impl Program {
 
 impl Default for Program {
 	fn default() -> Self {
-		Program::new(&[])
+		Program::new(Vec::default())
 	}
 }
 
@@ -133,20 +129,20 @@ pub struct ProgramIter<'a> {
 }
 
 impl Iterator for ProgramIter<'_> {
-	type Item = (WordAddress, Instruction);
+	type Item = (WordAddress, Option<Instruction>);
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let program_address = self.program_address;
-		let opt_instruction = self
-			.program
-			.program_address_instruction_map
-			.get(self.program_address.0 as usize)?;
-		match opt_instruction {
-			Some(instruction) => {
-				self.program_address += instruction.get_word_size() as u16;
-				Some((program_address, *instruction))
-			}
-			None => None,
+		if self.program_address.0 as usize >= self.program.len() {
+			return None;
 		}
+
+		let program_address = self.program_address;
+		let instruction = self.program.get_instruction(self.program_address);
+		if let Some(instruction) = &instruction {
+			self.program_address += instruction.get_word_size() as u16;
+		} else {
+			self.program_address += 1;
+		}
+		Some((program_address, instruction))
 	}
 }

@@ -1,5 +1,5 @@
 use ardemu_core::{
-	load_elf, FlagType, Instruction, Program,
+	load_elf, Instruction, Program,
 	Register::{R1, R16, R17, R22, R23, R24, R28, R29},
 	UpperRegister, WordAddress, WordOffset16, WordOffset8,
 };
@@ -88,27 +88,14 @@ fn test_load_elf_file() {
 				Instruction::Ldi { register: UpperRegister::R24, value: 0x00.into() },
 				Instruction::Ldi { register: UpperRegister::R25, value: 0x00.into() },
 				Instruction::Ret,
-				// (CLI)
-				Instruction::Bclr { flag_type: FlagType::Interrupt },
+				Instruction::CLI,
 				Instruction::RJmp { word_offset: WordOffset16(-1) /* -1 words = -2 bytes */ },
 			];
 
-			let expected_program = Program::new(&expected_instructions);
+			let expected_program = Program::load_instruction_list(&expected_instructions);
 
-			assert_eq!(
-				program.len(),
-				expected_program.len(),
-				"program length should be {}, but is {}\noutput: {program:#?}\nexpected: {expected_program:#?}",
-				expected_program.len(),
-				program.len()
-			);
-			for i in 0..program.len() {
-				let program_address = WordAddress(i as u32);
-				assert_eq!(
-					program.get(program_address),
-					expected_program.get(program_address)
-				);
-			}
+			assert_eq!(&program.flash, &expected_program.flash);
+
 			assert_eq!(
 				program.get_debug_symbol(WordAddress(0)).unwrap(),
 				"__vectors"
