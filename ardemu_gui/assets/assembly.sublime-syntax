@@ -10,7 +10,7 @@ scope: source.avrasm
 contexts:
   main:
     # Keywords (AVR instructions)
-    - match: (?i)\b(nop|break|jmp|or|ori|eor|com|neg|swap|lsr|ror|asr|mul|ldi|mov|movw|rjmp|push|pop|cp|cpi|cpc|cpse|breq|brne|brlt|brcs|brcc|call|ret|rcall|sub|sbc|subi|sbci|sbiw|dec|add|adc|adiw|inc|and|andi|bset|bclr|sei|cli|sbi|cbi|bst|bld|sts|lds|ld|st|out|in)\b
+    - match: (?i)\b(nop|break|jmp|or|ori|eor|com|neg|swap|lsr|ror|asr|mul|ldi|mov|movw|rjmp|push|pop|cp|cpi|cpc|cpse|breq|brne|brlt|brcs|brcc|call|ret|rcall|sub|sbc|subi|sbci|sbiw|dec|add|adc|adiw|inc|and|andi|bset|bclr|sei|cli|sbi|cbi|bst|bld|sts|lds|ld|st|out|in|lpm)\b
       scope: keyword.control.avr
 
     # Registers (R0-R31, X/Y/Z pointers)

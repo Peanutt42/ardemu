@@ -1,6 +1,6 @@
 use crate::{
-	get_bit_from_u16, set_bit_in_u16, FlagType, Imm16, Imm3, Imm8, Instruction, LowerEvenRegister,
-	PointerRegister,
+	get_bit_from_u16, set_bit_in_u16, FlagType, Imm16, Imm3, Imm8, Instruction,
+	LPMZPointerRegisterAction, LowerEvenRegister, PointerRegister,
 	Register::{self, R16, R24},
 	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
@@ -258,6 +258,14 @@ impl Opcode for Instruction {
 					0b0010 => Some(Instruction::Ld {
 						register: load_rr(opcode_16bit)?,
 						pointer_register: PointerRegister::Z_PRE_DEC,
+					}),
+					0b0100 => Some(Instruction::Lpm {
+						register: load_rr(opcode_16bit)?,
+						z_pointer_action: LPMZPointerRegisterAction::Unchanged,
+					}),
+					0b0101 => Some(Instruction::Lpm {
+						register: load_rr(opcode_16bit)?,
+						z_pointer_action: LPMZPointerRegisterAction::PostIncrement,
 					}),
 					0b1001 => Some(Instruction::Ld {
 						register: load_rr(opcode_16bit)?,
@@ -815,6 +823,15 @@ impl Opcode for Instruction {
 			Self::Out { register, address } => {
 				single_16bit_opcode(0b1011_1000_0000_0000 | d5_a6_opcode(register, address))
 			}
+			Self::Lpm {
+				register,
+				z_pointer_action,
+			} => single_16bit_opcode(match z_pointer_action {
+				LPMZPointerRegisterAction::Unchanged => 0b1001_0000_0000_0100 | d5_opcode(register),
+				LPMZPointerRegisterAction::PostIncrement => {
+					0b1001_0000_0000_0101 | d5_opcode(register)
+				}
+			}),
 		}
 	}
 }

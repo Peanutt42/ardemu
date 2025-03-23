@@ -1,7 +1,7 @@
 use ardemu_core::{
-	assemble, AsmParseError, AsmParseErrorType, FlagType, Instruction, LowerEvenRegister,
-	PointerRegister, Program, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
-	R0, R1, R16, R17, R31,
+	assemble, AsmParseError, AsmParseErrorType, FlagType, Instruction, LPMZPointerRegisterAction,
+	LowerEvenRegister, PointerRegister, Program, UpperRegister, WordAddress, WordOffset16,
+	WordOffset8, WordRegister, R0, R1, R16, R17, R31,
 };
 
 #[test]
@@ -66,6 +66,7 @@ fn test_assemble_every_instruction() {
 			ld r0, -X
 			out 0x042, r0
 			in r0, 0x042
+			lpm r0, Z+
 			",
 	)
 	.expect("failed to assemble test code");
@@ -249,6 +250,10 @@ fn test_assemble_every_instruction() {
 		Instruction::In {
 			register: R0,
 			address: 0x042.into(),
+		},
+		Instruction::Lpm {
+			register: R0,
+			z_pointer_action: LPMZPointerRegisterAction::PostIncrement,
 		},
 	]);
 

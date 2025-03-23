@@ -2,7 +2,8 @@ use std::{collections::HashSet, ops::RangeInclusive};
 
 use crate::{
 	get_bit_from_u8, set_bit_in_u8, u8s_from_u16, u8s_to_u16, CpuError, FlagType, Flags,
-	Instruction, LowerEvenRegister, Opcode, PointerRegisterAction, Program, Register, WordAddress,
+	Instruction, LPMZPointerRegisterAction, LowerEvenRegister, Opcode, PointerRegister,
+	PointerRegisterAction, Program, Register, WordAddress,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -162,6 +163,14 @@ impl Cpu {
 			})?;
 		*mut_ram = value;
 		Ok(())
+	}
+
+	fn read_flash(&self, word_address: WordAddress) -> Result<u16, CpuError> {
+		self.program
+			.flash
+			.get(word_address.0 as usize)
+			.copied()
+			.ok_or(CpuError::InvalidFlashAddress { addr: word_address })
 	}
 
 	fn push(&mut self, value: u8) -> Result<(), CpuError> {
@@ -623,6 +632,31 @@ impl Cpu {
 			Instruction::In { register, address } => {
 				self.write_register(register, self.read_ram(address.0 as u16)?);
 				self.program_counter += 1;
+			}
+			Instruction::Lpm {
+				register,
+				z_pointer_action,
+			} => {
+				let byte_address = self.read_register_pair16(PointerRegister::Z);
+				let word_address = WordAddress((byte_address >> 1) as u32);
+				// lsb == 0 -> low byte, lsb == 1 -> high byte
+				let high_byte = (byte_address & 0x1) != 0;
+				let word = self.read_flash(word_address)?;
+				let [low, high] = u8s_from_u16(word);
+				let byte_value = if high_byte { high } else { low };
+				self.write_register(register, byte_value);
+				match z_pointer_action {
+					LPMZPointerRegisterAction::Unchanged => {}
+					LPMZPointerRegisterAction::PostIncrement => {
+						self.write_register_pair16(
+							PointerRegister::Z,
+							byte_address.wrapping_add(1),
+						);
+					}
+				}
+				self.program_counter += 1;
+				// lpm takes 3 cycles
+				self.cycle += 2;
 			}
 		}
 

@@ -1,12 +1,14 @@
 use std::num::ParseIntError;
 use thiserror::Error;
 
-use crate::{Imm16, Register};
+use crate::{Imm16, Register, WordAddress};
 
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]
 pub enum CpuError {
 	#[error("Invalid RAM address {addr}")]
 	InvalidRamAddress { addr: Imm16 },
+	#[error("Invalid flash (program memory) address {addr}")]
+	InvalidFlashAddress { addr: WordAddress },
 	#[error("Stack overflow")]
 	StackOverflow,
 	#[error("Stack underflow")]
@@ -66,6 +68,8 @@ pub enum AsmParseErrorType {
 	InvalidRegisterIoAddress(String),
 	#[error("invalid pointer register: expected something like '-X' or 'Z+', but got {0}")]
 	InvalidPointerRegister(String),
+	#[error("invalid z pointer register for lpm instruction: expected something like 'Z' or 'Z+', but got {0}")]
+	InvalidLPMZPointerRegister(String),
 }
 
 #[derive(Debug, Clone, Copy, Error, PartialEq, Eq)]

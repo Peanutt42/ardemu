@@ -1,6 +1,7 @@
 use crate::{
-	AsmOperand, FlagType, Imm16, Imm3, Imm8, LowerEvenRegister, PointerRegister, Register,
-	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
+	AsmOperand, FlagType, Imm16, Imm3, Imm8, LPMZPointerRegisterAction, LowerEvenRegister,
+	PointerRegister, Register, RegisterAddress, UpperRegister, WordAddress, WordOffset16,
+	WordOffset8, WordRegister,
 };
 use ardemu_instruction_helper_macro::{
 	DisplayInstruction, ParseAsmInstruction, ReferencedRegisters,
@@ -260,6 +261,13 @@ pub enum Instruction {
 	In { register: Register, address: Imm8 },
 	/// store value of register into sram address
 	Out { address: Imm8, register: Register },
+	/// load value from program memory address into register
+	// TODO: also implement empty lpm instruction: 'lpm' -> implied r0 register with no z action
+	Lpm {
+		register: Register,
+		/// what happens to the Z-register
+		z_pointer_action: LPMZPointerRegisterAction,
+	},
 }
 
 impl Instruction {
@@ -324,6 +332,7 @@ impl Instruction {
 		self,
 		program_address_of_instruction: WordAddress,
 		return_address_in_stack: WordAddress,
+		z_pointer_value: u16,
 		is_currently_executing: bool,
 	) -> Option<WordAddress> {
 		match self {
@@ -371,6 +380,10 @@ impl Instruction {
 					.wrapping_add_signed(word_offset)
 					.wrapping_add_signed(1),
 			),
+			// z_pointer_value is in bytes (lsb selectes high or low byte)
+			Self::Lpm { .. } if is_currently_executing => {
+				Some(WordAddress((z_pointer_value >> 1) as u32))
+			}
 			_ => None,
 		}
 	}

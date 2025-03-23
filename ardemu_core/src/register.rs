@@ -336,6 +336,37 @@ impl PointerRegisterAction {
 	}
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Ord, SelfRustTokenize)]
+#[repr(u8)]
+pub enum LPMZPointerRegisterAction {
+	#[default]
+	Unchanged,
+	PostIncrement,
+}
+impl std::fmt::Display for LPMZPointerRegisterAction {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}",
+			match self {
+				Self::Unchanged => "Z",
+				Self::PostIncrement => "Z+",
+			}
+		)
+	}
+}
+impl AsmOperand for LPMZPointerRegisterAction {
+	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
+		match operand {
+			"Z" => Ok(Self::Unchanged),
+			"Z+" => Ok(Self::PostIncrement),
+			_ => Err(AsmParseErrorType::InvalidLPMZPointerRegister(
+				operand.to_string(),
+			)),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash, Ord, SelfRustTokenize)]
 #[repr(u8)]
 pub enum PointerRegister {

@@ -1,5 +1,6 @@
 use ardemu_core::{
-	FlagType, Imm3, Instruction, LowerEvenRegister, Opcode, PointerRegister,
+	FlagType, Imm3, Instruction, LPMZPointerRegisterAction, LowerEvenRegister, Opcode,
+	PointerRegister,
 	Register::{R0, R15, R16, R31},
 	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
@@ -438,6 +439,13 @@ fn test_load_instructions_from_opcodes() {
 		Instruction::St {
 			pointer_register: PointerRegister::Z_PRE_DEC,
 			register: R31,
+		},
+	);
+	test_16bit(
+		0b1001_0001_1111_0101,
+		Instruction::Lpm {
+			register: R31,
+			z_pointer_action: LPMZPointerRegisterAction::PostIncrement,
 		},
 	);
 }

@@ -494,6 +494,7 @@ impl App {
 				instruction.get_referenced_program_address(
 					program_counter,
 					potential_return_address,
+					cpu.read_register_pair16(PointerRegister::Z),
 					true,
 				)
 			});
@@ -531,6 +532,7 @@ impl App {
 												.get_referenced_program_address(
 													program_address,
 													potential_return_address,
+													cpu.read_register_pair16(PointerRegister::Z),
 													instr_currently_executing,
 												)
 												.and_then(|referenced_program_address| {
