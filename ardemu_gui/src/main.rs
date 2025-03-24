@@ -597,15 +597,15 @@ impl App {
 										),
 										row![
 											match instruction {
-												Some(instruction) => text!("{instruction}"),
+												Some(instruction) => text!("{instruction}")
+													.color_maybe(if instr_currently_executing {
+														Some(Color::from_rgb(1.0, 0.0, 0.0))
+													} else {
+														None
+													}),
 												None => text("???"),
 											}
-											.font(Font::MONOSPACE)
-											.color_maybe(if instr_currently_executing {
-												Some(Color::from_rgb(1.0, 0.0, 0.0))
-											} else {
-												None
-											}),
+											.font(Font::MONOSPACE),
 											text(debug_info)
 												.font(Font::MONOSPACE)
 												.style(secondary_text_style)

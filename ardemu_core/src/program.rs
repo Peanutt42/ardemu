@@ -97,6 +97,7 @@ impl Program {
 	}
 
 	/// linear time complexity! (32-bit instructions take up two program addresses (2 words))
+	/// invalid opcodes are ALSO considered as a instruction (in the gui with a '???')
 	/// returns the index of the instruction based on the program address
 	/// returns None if the address is invalid
 	pub fn get_instruction_index(&self, address: WordAddress) -> Option<usize> {
@@ -106,8 +107,8 @@ impl Program {
 			if program_address == address {
 				return Some(instruction_index);
 			}
+			instruction_index += 1;
 			if let Some(instruction) = self.get_instruction(program_address) {
-				instruction_index += 1;
 				program_address += instruction.get_word_size();
 			} else {
 				program_address += 1;
