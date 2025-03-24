@@ -1,7 +1,8 @@
 use crate::{
 	AsmOperand, FlagType, Imm16, Imm3, Imm8, LPMZPointerRegisterAction, LowerEvenRegister,
-	PointerRegister, Register, RegisterAddress, UpperRegister, WordAddress, WordOffset16,
-	WordOffset8, WordRegister,
+	PointerRegister,
+	Register::{self, R0},
+	RegisterAddress, UpperRegister, WordAddress, WordOffset16, WordOffset8, WordRegister,
 };
 use ardemu_instruction_helper_macro::{
 	DisplayInstruction, ParseAsmInstruction, ReferencedRegisters,
@@ -262,7 +263,6 @@ pub enum Instruction {
 	/// store value of register into sram address
 	Out { address: Imm8, register: Register },
 	/// load value from program memory address into register
-	// TODO: also implement empty lpm instruction: 'lpm' -> implied r0 register with no z action
 	Lpm {
 		register: Register,
 		/// what happens to the Z-register
@@ -278,6 +278,12 @@ impl Instruction {
 	/// alias for bclr 7 ; clear interrupt flag
 	pub const CLI: Self = Self::Bclr {
 		flag_type: FlagType::Interrupt,
+	};
+
+	/// alias for just 'lpm': r0 and Z implied
+	pub const LPM: Self = Self::Lpm {
+		register: R0,
+		z_pointer_action: LPMZPointerRegisterAction::Unchanged,
 	};
 
 	pub fn get_referenced_memory_address_range(

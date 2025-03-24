@@ -360,6 +360,7 @@ impl Opcode for Instruction {
 							0b0000 if (opcode_16bit & 0x1) == 0 => Some(Instruction::Ret),
 							0b0001 if (opcode_16bit & 0x1) == 0 => Some(Instruction::Reti),
 							0b1001 if (opcode_16bit & 0x1) == 0 => Some(Instruction::Break),
+							0b1100 if (opcode_16bit & 0x1) == 0 => Some(Instruction::LPM),
 							_ => None,
 						},
 						_ => None,

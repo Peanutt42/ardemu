@@ -86,7 +86,8 @@ fn split_mnemonic_operands(line: &str) -> (String, Vec<&str>) {
 	(mnemonic, operands)
 }
 
-/// Substitutes a LDA instruction to a program address with a LDA instruction to a symbol, which is later converted back to a LDA instruction to a program address.
+/// Intermediate representation of an instruction before the whole source code is parsed.
+/// After the first pass of parsing, these intermediate instructions are converted into actual instructions.
 #[derive(Debug)]
 enum IntermediateInstruction {
 	Jmp { symbol: String, line_number: usize },
@@ -166,14 +167,14 @@ impl IntermediateInstruction {
 	fn get_word_size(&self) -> u8 {
 		match self {
 			Self::Instruction(instruction) => instruction.get_word_size(),
-			Self::Breq { .. } => 1,  // see of Instruction::Breq::get_word_size()
-			Self::Brne { .. } => 1,  // see of Instruction::Brne::get_word_size()
-			Self::Brlt { .. } => 1,  // see of Instruction::Brlt::get_word_size()
-			Self::Brcs { .. } => 1,  // see of Instruction::Brlt::get_word_size()
-			Self::Brcc { .. } => 1,  // see of Instruction::Brlt::get_word_size()
-			Self::Call { .. } => 2,  // see of Instruction::Call::get_word_size()
-			Self::RCall { .. } => 1, // see of Instruction::RCall::get_word_size()
-			Self::Jmp { .. } => 2,   // see of Instruction::Jmp::get_word_size()
+			Self::Breq { .. } => 1,  // see in Instruction::Breq::get_word_size()
+			Self::Brne { .. } => 1,  // see in Instruction::Brne::get_word_size()
+			Self::Brlt { .. } => 1,  // see in Instruction::Brlt::get_word_size()
+			Self::Brcs { .. } => 1,  // see in Instruction::Brlt::get_word_size()
+			Self::Brcc { .. } => 1,  // see in Instruction::Brlt::get_word_size()
+			Self::Call { .. } => 2,  // see in Instruction::Call::get_word_size()
+			Self::RCall { .. } => 1, // see in Instruction::RCall::get_word_size()
+			Self::Jmp { .. } => 2,   // see in Instruction::Jmp::get_word_size()
 		}
 	}
 }
@@ -276,6 +277,13 @@ fn parse_instruction(
 				})
 			}
 		}
+		"LPM" => Ok(IntermediateInstruction::Instruction({
+			if operands.is_empty() {
+				Instruction::LPM
+			} else {
+				Instruction::parse_asm_instruction(mnemonic, operands)?
+			}
+		})),
 		_ => Instruction::parse_asm_instruction(mnemonic, operands)
 			.map(IntermediateInstruction::Instruction),
 	}

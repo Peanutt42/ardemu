@@ -448,6 +448,7 @@ fn test_load_instructions_from_opcodes() {
 			z_pointer_action: LPMZPointerRegisterAction::PostIncrement,
 		},
 	);
+	test_16bit(0b1001_0101_1100_1000, Instruction::LPM);
 }
 
 // tests every supported 16 bit instruction and check that the reproducing opcode is the same
@@ -461,13 +462,21 @@ fn test_get_opcode_from_16bit_instruction() {
 				continue;
 			}
 
-			let reproduced_opcode = instruction.get_opcode();
-			assert_eq!(
-				opcode_32_bit,
-				reproduced_opcode,
-				"expected: {opcode_16bit:#018b}, got: {:#018b} (instruction: {instruction})",
-				reproduced_opcode >> 16
-			);
+			// 'lpm' and 'lpm r0, Z' result in the same instruction, but have different opcodes
+			if instruction == Instruction::LPM {
+				assert_eq!(
+					Some(instruction),
+					Instruction::load(instruction.get_opcode())
+				);
+			} else {
+				let reproduced_opcode = instruction.get_opcode();
+				assert_eq!(
+					opcode_32_bit,
+					reproduced_opcode,
+					"expected: {opcode_16bit:#018b}, got: {:#018b} (instruction: {instruction})",
+					reproduced_opcode >> 16
+				);
+			}
 		}
 	}
 }
