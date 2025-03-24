@@ -44,14 +44,16 @@ mod style;
 use style::{
 	background_style, button_style, hidden_secondary_button_style, panel_style,
 	pick_list_menu_style, pick_list_style, primary_text_style, secondary_container_style,
-	secondary_text_style,
+	secondary_text_style, show_on_hover_button_style,
 };
 
 mod code_editor;
 use code_editor::unindent_text;
 
 mod assets;
-use assets::{ARDUINO_UNO_LED_BUILTIN_ON_SVG, ARDUINO_UNO_LED_POWER_ON_SVG, ARDUINO_UNO_SVG};
+use assets::{
+	ARDUINO_UNO_LED_BUILTIN_ON_SVG, ARDUINO_UNO_LED_POWER_ON_SVG, ARDUINO_UNO_SVG, ARROW_RIGHT_SVG,
+};
 
 mod arduino_sketch;
 
@@ -77,6 +79,7 @@ enum CpuSimMessage {
 	SetSimulating(bool),
 	Step,
 	Skip,
+	SkipToInstruction(WordAddress),
 	AddBreakpoint(WordAddress),
 	RemoveBreakpoint(WordAddress),
 }
@@ -145,6 +148,7 @@ enum Message {
 	ToggleSimulateCpu,
 	Step,
 	Skip,
+	SkipToInstruction(WordAddress),
 	SetStickToCurrentInstruction(bool),
 	ChangeArduinoCLIFilepath(PathBuf),
 	PickArduinoCLIFileDialog,
@@ -246,6 +250,9 @@ impl App {
 			)),
 			Message::Step => self.send_cpu_sim_message(CpuSimMessage::Step),
 			Message::Skip => self.send_cpu_sim_message(CpuSimMessage::Skip),
+			Message::SkipToInstruction(program_address) => {
+				self.send_cpu_sim_message(CpuSimMessage::SkipToInstruction(program_address))
+			}
 			Message::SetStickToCurrentInstruction(stick) => {
 				self.stick_to_current_instruction = stick;
 				if stick {
@@ -567,6 +574,26 @@ impl App {
 										};
 
 									row![
+										tooltip(
+											button(
+												svg(ARROW_RIGHT_SVG.clone())
+													.style(|_t, s| svg::Style {
+														color: Some(match s {
+															svg::Status::Idle => Color::TRANSPARENT,
+															svg::Status::Hovered => Color::WHITE,
+														})
+													})
+													.width(16)
+													.height(16)
+											)
+											.padding(Padding::default())
+											.style(show_on_hover_button_style)
+											.on_press(Message::SkipToInstruction(program_address)),
+											container(text("Skip to instruction").size(12))
+												.style(secondary_container_style)
+												.padding(3),
+											Position::Bottom,
+										),
 										button(
 											text!("{program_address}:")
 												.font(Font::MONOSPACE)
@@ -1067,6 +1094,9 @@ fn cpu_simulation_thread(
 					},
 					CpuSimMessage::Skip => {
 						cpu.skip();
+					}
+					CpuSimMessage::SkipToInstruction(program_address) => {
+						cpu.set_program_counter(program_address);
 					}
 					CpuSimMessage::SetSimulating(simulating) => {
 						simulate_cpu = simulating;

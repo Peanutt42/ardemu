@@ -88,6 +88,10 @@ impl Cpu {
 		self.program_counter
 	}
 
+	pub fn set_program_counter(&mut self, new_program_counter: WordAddress) {
+		self.program_counter = new_program_counter;
+	}
+
 	pub fn get_stack_pointer(&self) -> u16 {
 		self.stack_pointer
 	}
