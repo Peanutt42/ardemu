@@ -29,6 +29,7 @@ pub fn compile_arduino_sketch(
 			"--warnings",
 			"all",
 			"--verbose",
+			"--no-color",
 			&temp_arduino_sketch_dir.to_string_lossy(),
 		])
 		.stdout(Stdio::piped())

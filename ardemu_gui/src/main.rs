@@ -680,12 +680,16 @@ impl App {
 					.into()
 				}
 				ProgramState::Error(e) => Element::new(
-					container(
-						text!("Error: {e}")
-							.width(Fill)
-							.color(Color::from_rgb(1.0, 0.0, 0.0))
+					scrollable(
+						container(text!("Error:\n{e}").color(Color::from_rgb(1.0, 0.0, 0.0)))
+							.padding(10)
 					)
-					.padding(10)
+					.direction(Direction::Both {
+						vertical: scrollable::Scrollbar::default(),
+						horizontal: scrollable::Scrollbar::default(),
+					})
+					.width(Fill)
+					.height(Fill)
 				),
 			})
 			.style(panel_style),
