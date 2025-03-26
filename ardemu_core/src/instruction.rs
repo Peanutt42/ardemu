@@ -121,6 +121,11 @@ pub enum Instruction {
 		reg_dest: Register,
 		reg_read: Register,
 	},
+	/// skips next instruction if bit in register is set
+	Sbis {
+		register_address: RegisterAddress,
+		bit: Imm3,
+	},
 	/// branch if equal (Z flag is 1)
 	/// PC = PC + offset + 1 (+1 because of the instruction itself)
 	/// offset is technically a 7 bit offset value

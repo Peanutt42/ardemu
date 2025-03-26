@@ -187,6 +187,13 @@ fn test_load_instructions_from_opcodes() {
 		},
 	);
 	test_16bit(
+		0b1001_1011_1111_1000,
+		Instruction::Sbis {
+			register_address: R31.into(),
+			bit: Imm3(0),
+		},
+	);
+	test_16bit(
 		0b1111_0010_0000_1001,
 		Instruction::Breq {
 			word_offset: WordOffset8(-63),

@@ -406,13 +406,23 @@ impl Opcode for Instruction {
 						bit,
 					})
 				}
-				0b101 if (opcode_16bit & 0x100) == 0x000 => {
-					let (register_address, bit) = load_a5_b3(opcode_16bit)?;
-					Some(Instruction::Sbi {
-						register_address,
-						bit,
-					})
-				}
+				0b101 => match opcode_16bit & 0x100 {
+					0x000 => {
+						let (register_address, bit) = load_a5_b3(opcode_16bit)?;
+						Some(Instruction::Sbi {
+							register_address,
+							bit,
+						})
+					}
+					0x100 => {
+						let (register_address, bit) = load_a5_b3(opcode_16bit)?;
+						Some(Instruction::Sbis {
+							register_address,
+							bit,
+						})
+					}
+					_ => None,
+				},
 				// single missing bit of the prior 3 bits: ____ ___X ____ ____
 				0b011 => match (opcode_16bit & 0x100) >> 8 {
 					0b0 => {
@@ -705,6 +715,10 @@ impl Opcode for Instruction {
 			Self::Cpse { reg_dest, reg_read } => {
 				single_16bit_opcode(0b0001_0000_0000_0000 | r5_d5_opcode(reg_dest, reg_read))
 			}
+			Self::Sbis {
+				register_address,
+				bit,
+			} => single_16bit_opcode(0b1001_1011_0000_0000 | a5_b3_opcode(register_address, bit)),
 			Self::Breq { word_offset } => {
 				single_16bit_opcode(0b1111_0000_0000_0001 | k7_opcode(word_offset))
 			}

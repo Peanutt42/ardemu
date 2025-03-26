@@ -1,7 +1,7 @@
 use ardemu_core::{
-	assemble, AsmParseError, AsmParseErrorType, FlagType, Instruction, LPMZPointerRegisterAction,
-	LowerEvenRegister, PointerRegister, Program, UpperRegister, WordAddress, WordOffset16,
-	WordOffset8, WordRegister, R0, R1, R16, R17, R31,
+	assemble, AsmParseError, AsmParseErrorType, FlagType, Imm3, Instruction,
+	LPMZPointerRegisterAction, LowerEvenRegister, PointerRegister, Program, UpperRegister,
+	WordAddress, WordOffset16, WordOffset8, WordRegister, R0, R1, R16, R17, R31,
 };
 
 #[test]
@@ -31,6 +31,7 @@ fn test_assemble_every_instruction() {
 			cpi r16, 1
 			cpc r16, r17
 			cpse r16, r17
+			sbis 0x1F, 0
 			breq begin
 			brne begin
 			brlt begin
@@ -132,32 +133,36 @@ fn test_assemble_every_instruction() {
 			reg_dest: R16,
 			reg_read: R17,
 		},
-		// update offset, if relative offset to 'begin' changes in the source code
-		Instruction::Breq {
-			word_offset: WordOffset8(-25),
+		Instruction::Sbis {
+			register_address: R31.into(),
+			bit: Imm3(0),
 		},
 		// update offset, if relative offset to 'begin' changes in the source code
-		Instruction::Brne {
+		Instruction::Breq {
 			word_offset: WordOffset8(-26),
 		},
 		// update offset, if relative offset to 'begin' changes in the source code
-		Instruction::Brlt {
+		Instruction::Brne {
 			word_offset: WordOffset8(-27),
 		},
 		// update offset, if relative offset to 'begin' changes in the source code
-		Instruction::Brcs {
+		Instruction::Brlt {
 			word_offset: WordOffset8(-28),
 		},
 		// update offset, if relative offset to 'begin' changes in the source code
-		Instruction::Brcc {
+		Instruction::Brcs {
 			word_offset: WordOffset8(-29),
+		},
+		// update offset, if relative offset to 'begin' changes in the source code
+		Instruction::Brcc {
+			word_offset: WordOffset8(-30),
 		},
 		Instruction::Call {
 			word_address: WordAddress(0),
 		},
 		// update offset, if relative offset to 'begin' changes in the source code
 		Instruction::RCall {
-			word_offset: WordOffset16(-32),
+			word_offset: WordOffset16(-33),
 		},
 		Instruction::Ret,
 		Instruction::Reti,

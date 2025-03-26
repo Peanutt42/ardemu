@@ -34,7 +34,7 @@ use std::{
 		mpsc::{Receiver, TryRecvError},
 		LazyLock,
 	},
-	time::Instant,
+	time::{Duration, Instant},
 };
 
 #[allow(clippy::expect_used)]
@@ -77,6 +77,7 @@ struct CpuSim {
 enum CpuSimMessage {
 	ResetAndLoadProgram(Program),
 	SetSimulating(bool),
+	SetSimRealtimeSpeed(bool),
 	Step,
 	Skip,
 	SkipToInstruction(WordAddress),
@@ -94,6 +95,7 @@ enum ProgramState {
 #[derive(Debug)]
 struct App {
 	simulate_cpu: bool,
+	cpu_sim_realtime_speed: bool,
 	cpu_sim: triple_buffer::Output<CpuSim>,
 	cpu_sim_message_sender: std::sync::mpsc::Sender<CpuSimMessage>,
 	cpu_sim_dirty: bool,
@@ -124,6 +126,7 @@ impl Default for App {
 
 		Self {
 			simulate_cpu: false,
+			cpu_sim_realtime_speed: false,
 			cpu_sim: readable_cpu_sim,
 			cpu_sim_message_sender: sender,
 			cpu_sim_dirty: false,
@@ -146,6 +149,7 @@ enum Message {
 	ResetCpu,
 	SimulateCpu(bool),
 	ToggleSimulateCpu,
+	SetCpuSimRealtimeSpeed(bool),
 	Step,
 	Skip,
 	SkipToInstruction(WordAddress),
@@ -248,6 +252,10 @@ impl App {
 					_ => Program::default(),
 				},
 			)),
+			Message::SetCpuSimRealtimeSpeed(realtime_speed) => {
+				self.cpu_sim_realtime_speed = realtime_speed;
+				self.send_cpu_sim_message(CpuSimMessage::SetSimRealtimeSpeed(realtime_speed))
+			}
 			Message::Step => self.send_cpu_sim_message(CpuSimMessage::Step),
 			Message::Skip => self.send_cpu_sim_message(CpuSimMessage::Skip),
 			Message::SkipToInstruction(program_address) => {
@@ -989,6 +997,11 @@ impl App {
 				border: rounded(8),
 				..Default::default()
 			}),
+			checkbox(
+				format!("Realtime ({}MHz)", Cpu::FREQUENCY / 1_000_000),
+				self.cpu_sim_realtime_speed
+			)
+			.on_toggle(Message::SetCpuSimRealtimeSpeed),
 			Space::new(Fill, 0.0),
 			pick_list(CodeSample::ALL, None::<CodeSample>, Message::LoadCodeSample)
 				.placeholder("Load Code Sample")
@@ -1040,31 +1053,65 @@ fn cpu_simulation_thread(
 	mut writable_cpu_sim: triple_buffer::Input<CpuSim>,
 ) {
 	let mut simulate_cpu = false;
+	let mut realtime_speed = false;
 
 	loop {
-		let start = Instant::now();
-
 		if simulate_cpu {
+			let start = Instant::now();
 			let start_cycle = cpu.get_cycle();
 
-			const BULK_STEP_COUNT: usize = 1_000_000;
-			for _ in 0..BULK_STEP_COUNT {
-				match cpu.step() {
-					Ok(cpu_status) => match cpu_status {
-						CpuStatus::Normal => {}
-						CpuStatus::BreakpointHit | CpuStatus::BreakHit => {
-							break;
+			if realtime_speed {
+				// gui gets new cpu state at 144 fps
+				const CPU_UPDATES_PER_SECOND: u64 = 144;
+				const CPU_STEPS_PER_FRAME: u64 = Cpu::FREQUENCY / CPU_UPDATES_PER_SECOND;
+
+				let cpu_frame_update_duration =
+					Duration::from_secs_f64(1.0 / CPU_UPDATES_PER_SECOND as f64);
+
+				while (cpu.get_cycle() - start_cycle) < CPU_STEPS_PER_FRAME {
+					match cpu.step() {
+						Ok(cpu_status) => match cpu_status {
+							CpuStatus::Normal => {}
+							CpuStatus::BreakpointHit | CpuStatus::BreakHit => {
+								break;
+							}
+							CpuStatus::ProgramFinished => {
+								println!("Program finished");
+								break;
+							}
+						},
+						Err(e) => {
+							eprintln!("failed to step cpu: {e}");
 						}
-						CpuStatus::ProgramFinished => {
-							println!("Program finished");
-							break;
+					}
+				}
+
+				let compute_duration = start.elapsed();
+				if compute_duration < cpu_frame_update_duration {
+					std::thread::sleep(cpu_frame_update_duration - compute_duration);
+				}
+			} else {
+				const BULK_STEP_COUNT: usize = 1_000_000;
+
+				for _ in 0..BULK_STEP_COUNT {
+					match cpu.step() {
+						Ok(cpu_status) => match cpu_status {
+							CpuStatus::Normal => {}
+							CpuStatus::BreakpointHit | CpuStatus::BreakHit => {
+								break;
+							}
+							CpuStatus::ProgramFinished => {
+								println!("Program finished");
+								break;
+							}
+						},
+						Err(e) => {
+							eprintln!("failed to step cpu: {e}");
 						}
-					},
-					Err(e) => {
-						eprintln!("failed to step cpu: {e}");
 					}
 				}
 			}
+
 			let cycles_per_second =
 				(cpu.get_cycle() - start_cycle) as f64 / start.elapsed().as_secs_f64();
 			writable_cpu_sim.write(CpuSim {
@@ -1100,6 +1147,9 @@ fn cpu_simulation_thread(
 					}
 					CpuSimMessage::SetSimulating(simulating) => {
 						simulate_cpu = simulating;
+					}
+					CpuSimMessage::SetSimRealtimeSpeed(new_realtime_speed) => {
+						realtime_speed = new_realtime_speed;
 					}
 					CpuSimMessage::AddBreakpoint(breakpoint_address) => {
 						cpu.add_breakpoint(breakpoint_address);

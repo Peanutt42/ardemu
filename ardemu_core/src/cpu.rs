@@ -32,6 +32,8 @@ pub struct Cpu {
 }
 
 impl Cpu {
+	pub const FREQUENCY: u64 = 16_000_000;
+
 	/// 64 KB
 	const SRAM_SIZE: usize = 64 * 1024;
 	const STACK_START_ADDRESS: u16 = 0xFEFF;
@@ -212,6 +214,16 @@ impl Cpu {
 		u8s_to_u16(low, high).into()
 	}
 
+	fn get_next_instruction_word_size(&self) -> u8 {
+		match self
+			.program
+			.get_instruction(self.get_program_counter() + 1u32)
+		{
+			Some(next_instruction) => next_instruction.get_word_size(),
+			None => 1,
+		}
+	}
+
 	pub fn execute(&mut self, instruction: Instruction) -> Result<CpuStatus, CpuError> {
 		if self.breakpoints.contains(&self.program_counter) {
 			return Ok(CpuStatus::BreakpointHit);
@@ -352,14 +364,34 @@ impl Cpu {
 			}
 			Instruction::Cpse { reg_dest, reg_read } => {
 				if self.read_register(reg_dest) == self.read_register(reg_read) {
-					let next_instruction_word_size = match self
-						.program
-						.get_instruction(self.get_program_counter() + 1u32)
-					{
-						Some(next_instruction) => next_instruction.get_word_size(),
-						None => 1,
-					};
+					let next_instruction_word_size = self.get_next_instruction_word_size();
 					self.program_counter += 1 + next_instruction_word_size;
+					if next_instruction_word_size == 1 {
+						// skip 1 word instruction: 2 cycles
+						self.cycle += 1;
+					} else {
+						// skip 2 word instruction: 3 cycles
+						self.cycle += 2;
+					}
+				} else {
+					self.program_counter += 1;
+				}
+			}
+			Instruction::Sbis {
+				register_address,
+				bit,
+			} => {
+				let register_value = self.read_register(register_address);
+				if get_bit_from_u8(register_value, bit.0) {
+					let next_instruction_word_size = self.get_next_instruction_word_size();
+					self.program_counter += 1 + next_instruction_word_size;
+					if next_instruction_word_size == 1 {
+						// skip 1 word instruction: 2 cycles
+						self.cycle += 1;
+					} else {
+						// skip 2 word instruction: 3 cycles
+						self.cycle += 2;
+					}
 				} else {
 					self.program_counter += 1;
 				}
