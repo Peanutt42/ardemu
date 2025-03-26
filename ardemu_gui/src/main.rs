@@ -813,7 +813,7 @@ impl App {
 	const ROW_HEIGHT: f32 = 18.0;
 	const DATA_COLUMN_SPACING: f32 = 5.0;
 	const BYTES_PER_ROW: u32 = 16;
-	fn memory_panel<'a>(&'a self, cpu: &'a Cpu, portrait: bool) -> Element<'a, Message> {
+	fn memory_panel<'a>(&'a self, cpu: &'a Cpu) -> Element<'a, Message> {
 		let referenced_memory_address_range = match cpu.get_current_instruction() {
 			Some(instruction) => instruction.get_referenced_memory_address_range(
 				cpu.get_stack_pointer(),
@@ -969,7 +969,7 @@ impl App {
 			}))
 			.style(panel_style)
 		]
-		.width(if portrait { FillPortion(3) } else { Fill })
+		.width(Fill)
 		.spacing(5)
 		.into()
 	}
@@ -1025,7 +1025,7 @@ impl App {
 		let arduino_board_panel = self.arduino_board_panel(cpu);
 		let register_panel = self.registers_panel(cpu);
 		let flags_panel = self.flags_panel(cpu);
-		let memory_panel = self.memory_panel(cpu, portrait);
+		let memory_panel = self.memory_panel(cpu);
 
 		if portrait {
 			row![
