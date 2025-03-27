@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use elf::{endian::AnyEndian, ElfBytes};
+use elf::{
+	abi::{STB_GLOBAL, STB_LOCAL, STB_WEAK, STT_FUNC, STT_NOTYPE, STT_OBJECT},
+	endian::AnyEndian,
+	ElfBytes,
+};
 
 use crate::{LoadElfError, Program, WordAddress};
 
@@ -46,20 +50,23 @@ fn load_debug_symbol_table(
 			}
 
 			let st_type = symbol.st_symtype();
-			let st_bind = symbol.st_bind();
 
-			// 0: NoType
-			// 2: Function
-			if st_type == 0 || st_type == 2 {
+			if st_type == STT_NOTYPE || st_type == STT_OBJECT || st_type == STT_FUNC {
 				if let Ok(name) = string_table.get(symbol.st_name as usize) {
 					// 1 word = 2 bytes
 					let address = WordAddress((symbol.st_value / 2) as u32);
+					let st_bind = symbol.st_bind();
 					match debug_symbol_table.get_mut(&address) {
 						Some((_prev_symbol_name, prev_symbol_bind)) => {
-							// use the latest symbol for the same address
-							// bind: global (1), local (2), etc.
-							// priorities global over local
-							if st_bind <= *prev_symbol_bind {
+							println!("{name}: {st_bind}, prev: {prev_symbol_bind}");
+
+							let should_override = match st_bind {
+								STB_GLOBAL => true,
+								STB_LOCAL => *prev_symbol_bind == STB_WEAK,
+								_ => false,
+							};
+
+							if should_override {
 								debug_symbol_table.insert(address, (name.to_string(), st_bind));
 							}
 						}
