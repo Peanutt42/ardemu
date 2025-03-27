@@ -58,8 +58,6 @@ fn load_debug_symbol_table(
 					let st_bind = symbol.st_bind();
 					match debug_symbol_table.get_mut(&address) {
 						Some((_prev_symbol_name, prev_symbol_bind)) => {
-							println!("{name}: {st_bind}, prev: {prev_symbol_bind}");
-
 							let should_override = match st_bind {
 								STB_GLOBAL => true,
 								STB_LOCAL => *prev_symbol_bind == STB_WEAK,
