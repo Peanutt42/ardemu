@@ -1,6 +1,6 @@
 use ardemu_core::{assemble, load_elf, load_ihex_str, Program};
 
-use crate::SourceCodeLanguage;
+use crate::ProgramSource;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CodeSample {
@@ -49,10 +49,10 @@ impl CodeSample {
 		}
 	}
 
-	pub fn get_language(&self) -> SourceCodeLanguage {
+	pub fn get_language(&self) -> ProgramSource {
 		match self {
-			Self::ArduinoBlinkSketch => SourceCodeLanguage::Arduino,
-			_ => SourceCodeLanguage::Assembly,
+			Self::ArduinoBlinkSketch => ProgramSource::Arduino,
+			_ => ProgramSource::Assembly,
 		}
 	}
 

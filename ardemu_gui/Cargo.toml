@@ -15,5 +15,5 @@ iced = { version = "0.13.1", features = [
 	"highlighter",
 ] }
 iced_aw = { version = "0.12", default-features = false, features = ["spinner"] }
-tokio = { version = "1.4", features = ["rt-multi-thread"] }
+tokio = { version = "1.4", features = ["rt-multi-thread", "fs"] }
 rfd = "0.15.3"

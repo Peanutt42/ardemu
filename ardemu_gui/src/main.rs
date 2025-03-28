@@ -60,8 +60,8 @@ mod arduino_sketch;
 mod code_sample;
 use code_sample::CodeSample;
 
-mod source_code_language;
-use source_code_language::SourceCodeLanguage;
+mod program_source;
+use program_source::ProgramSource;
 
 static INSTRUCTION_SCROLLABLE_ID: LazyLock<scrollable::Id> = LazyLock::new(scrollable::Id::unique);
 const INSTRUCTION_SCROLLABLE_PADDING: f32 = 10.0;
@@ -102,8 +102,11 @@ struct App {
 	stick_to_current_instruction: bool,
 	memory_view_start_address: u32,
 	memory_view_start_address_input: Option<String>,
-	source_code_text_content: text_editor::Content,
-	source_code_language: SourceCodeLanguage,
+	assembly_source_code_text_content: text_editor::Content,
+	arduino_source_code_text_content: text_editor::Content,
+	elf_filepath: Option<PathBuf>,
+	ihex_filepath: Option<PathBuf>,
+	program_source: ProgramSource,
 	/// whether the program is up to date with the source code
 	program_up_to_date: bool,
 	program: ProgramState,
@@ -112,7 +115,7 @@ struct App {
 
 impl Default for App {
 	fn default() -> Self {
-		let code_sample = CodeSample::default();
+		let code_sample = CodeSample::Fib8;
 		let program = code_sample.get_program();
 		let cpu = Cpu::new(program.clone());
 		let cpu_sim = CpuSim {
@@ -133,10 +136,13 @@ impl Default for App {
 			stick_to_current_instruction: false,
 			memory_view_start_address: 0,
 			memory_view_start_address_input: None,
-			source_code_text_content: text_editor::Content::with_text(
+			assembly_source_code_text_content: text_editor::Content::with_text(
 				&code_sample.get_source_code(),
 			),
-			source_code_language: code_sample.get_language(),
+			arduino_source_code_text_content: text_editor::Content::new(),
+			program_source: code_sample.get_language(),
+			elf_filepath: None,
+			ihex_filepath: None,
 			program_up_to_date: true,
 			program: ProgramState::Compiled(program),
 			arduino_cli_filepath: None,
@@ -159,9 +165,15 @@ enum Message {
 	PickArduinoCLIFileDialogCanceled,
 	LoadProgram(Result<Program, String>),
 	CompileProgram,
-	ChangeSourceCodeLanguage(SourceCodeLanguage),
-	SourceCodeChanged(text_editor::Action),
-	SourceCodeUnindent,
+	ChangeProgramSource(ProgramSource),
+	AssemblySourceCodeChanged(text_editor::Action),
+	AssemblySourceCodeUnindent,
+	ArduinoSourceCodeChanged(text_editor::Action),
+	ArduinoSourceCodeUnindent,
+	SetElfFilepath(PathBuf),
+	PickElfFileDialogCanceled(ProgramSource),
+	SetIHexFilepath(PathBuf),
+	PickIHexFileDialogCanceled(ProgramSource),
 	LoadCodeSample(CodeSample),
 	UpdateCpuState,
 	AddBreakpoint(WordAddress),
@@ -297,23 +309,61 @@ impl App {
 			}
 			Message::CompileProgram => {
 				self.program = ProgramState::Compiling;
+				let source_code = self.program_source.get_source_code_text(
+					&self.assembly_source_code_text_content,
+					&self.arduino_source_code_text_content,
+				);
 				Task::perform(
-					self.source_code_language.compile(
-						self.source_code_text_content.text(),
+					self.program_source.compile(
+						source_code,
+						self.elf_filepath.clone(),
+						self.ihex_filepath.clone(),
 						self.arduino_cli_filepath.clone(),
 					),
 					Message::LoadProgram,
 				)
 			}
-			Message::ChangeSourceCodeLanguage(new_source_code_language) => {
-				self.source_code_language = new_source_code_language;
-				self.source_code_text_content = text_editor::Content::new();
+			Message::ChangeProgramSource(new_program_source) => {
+				let previous_program_source = self.program_source;
+				self.program_source = new_program_source;
 				self.program_up_to_date = false;
-				self.update(Message::ResetCpu)
+				match self.program_source {
+					ProgramSource::ElfFile => Task::batch([
+						Task::perform(
+							rfd::AsyncFileDialog::new()
+								.add_filter("Elf (.elf)", &["elf"])
+								.pick_file(),
+							move |result| match result {
+								Some(file_handle) => {
+									Message::SetElfFilepath(file_handle.path().to_path_buf())
+								}
+								None => Message::PickElfFileDialogCanceled(previous_program_source),
+							},
+						),
+						self.update(Message::ResetCpu),
+					]),
+					ProgramSource::IHexFile => Task::batch([
+						Task::perform(
+							rfd::AsyncFileDialog::new()
+								.add_filter("IHex (.hex)", &["hex"])
+								.pick_file(),
+							move |result| match result {
+								Some(file_handle) => {
+									Message::SetIHexFilepath(file_handle.path().to_path_buf())
+								}
+								None => {
+									Message::PickIHexFileDialogCanceled(previous_program_source)
+								}
+							},
+						),
+						self.update(Message::ResetCpu),
+					]),
+					_ => self.update(Message::ResetCpu),
+				}
 			}
-			Message::SourceCodeChanged(action) => {
+			Message::AssemblySourceCodeChanged(action) => {
 				let is_edit = action.is_edit();
-				self.source_code_text_content.perform(action);
+				self.assembly_source_code_text_content.perform(action);
 				if is_edit {
 					self.program_up_to_date = false;
 					self.update(Message::ResetCpu)
@@ -321,14 +371,57 @@ impl App {
 					Task::none()
 				}
 			}
-			Message::SourceCodeUnindent => {
-				unindent_text(&mut self.source_code_text_content);
+			Message::AssemblySourceCodeUnindent => {
+				unindent_text(&mut self.assembly_source_code_text_content);
 				self.program_up_to_date = false;
 				self.update(Message::ResetCpu)
 			}
+			Message::ArduinoSourceCodeChanged(action) => {
+				let is_edit = action.is_edit();
+				self.arduino_source_code_text_content.perform(action);
+				if is_edit {
+					self.program_up_to_date = false;
+					self.update(Message::ResetCpu)
+				} else {
+					Task::none()
+				}
+			}
+			Message::ArduinoSourceCodeUnindent => {
+				unindent_text(&mut self.arduino_source_code_text_content);
+				self.program_up_to_date = false;
+				self.update(Message::ResetCpu)
+			}
+			Message::PickElfFileDialogCanceled(previous_program_source) => {
+				self.program_source = previous_program_source;
+				Task::none()
+			}
+			Message::SetElfFilepath(new_filepath) => {
+				self.elf_filepath = Some(new_filepath);
+				self.program_up_to_date = false;
+				self.update(Message::CompileProgram)
+			}
+			Message::PickIHexFileDialogCanceled(previous_program_source) => {
+				self.program_source = previous_program_source;
+				Task::none()
+			}
+			Message::SetIHexFilepath(new_filepath) => {
+				self.ihex_filepath = Some(new_filepath);
+				self.program_up_to_date = false;
+				self.update(Message::CompileProgram)
+			}
 			Message::LoadCodeSample(code_sample) => {
-				self.source_code_text_content = Content::with_text(&code_sample.get_source_code());
-				self.source_code_language = code_sample.get_language();
+				let source_code_content = Content::with_text(&code_sample.get_source_code());
+
+				match code_sample.get_language() {
+					ProgramSource::Assembly => {
+						self.assembly_source_code_text_content = source_code_content
+					}
+					ProgramSource::Arduino => {
+						self.arduino_source_code_text_content = source_code_content
+					}
+					_ => {}
+				}
+				self.program_source = code_sample.get_language();
 				self.program = ProgramState::Compiled(code_sample.get_program());
 				self.program_up_to_date = true;
 				self.update(Message::ResetCpu)
@@ -380,14 +473,11 @@ impl App {
 		let cpu_sim = self.cpu_sim.peek_output_buffer();
 
 		container(responsive(move |size| {
-			let editor_panel = self.editor_panel();
-			let instructions_panel = self.instructions_panel(cpu_sim);
-
 			if size.width > size.height {
 				column![
 					self.simulation_controls(cpu_sim),
 					row![
-						column![editor_panel, instructions_panel,].spacing(20),
+						self.program_panels(cpu_sim, false),
 						self.simulation_panel(false),
 					]
 					.spacing(20)
@@ -400,7 +490,7 @@ impl App {
 			} else {
 				column![
 					self.simulation_controls(cpu_sim),
-					row![editor_panel, instructions_panel].spacing(20),
+					self.program_panels(cpu_sim, true),
 					self.simulation_panel(true),
 				]
 				.spacing(20)
@@ -416,87 +506,96 @@ impl App {
 		.into()
 	}
 
-	fn editor_panel(&self) -> Element<Message> {
-		let compile_button_disabled =
-			matches!(self.source_code_language, SourceCodeLanguage::Arduino)
-				&& self.arduino_cli_filepath.is_none();
+	fn program_panels(&self, cpu_sim: &CpuSim, portrait: bool) -> Element<Message> {
+		match self.program_source.view(
+			&self.assembly_source_code_text_content,
+			&self.arduino_source_code_text_content,
+		) {
+			Some(editor_view) => {
+				let compile_button_disabled = matches!(self.program_source, ProgramSource::Arduino)
+					&& self.arduino_cli_filepath.is_none();
 
-		column![
-			row![
-				text("Code:  "),
-				pick_list(
-					SourceCodeLanguage::ALL,
-					Some(self.source_code_language),
-					Message::ChangeSourceCodeLanguage
-				)
-				.style(pick_list_style)
-				.menu_style(pick_list_menu_style),
-				Space::new(Fill, 0.0),
-				if self.program_up_to_date || matches!(self.program, ProgramState::Compiling) {
-					Element::new(Space::new(0, 0))
-				} else {
-					let compile_button: Element<Message> = button("Compile (Ctrl+B)")
-						.style(button_style)
-						.on_press_maybe(if compile_button_disabled {
-							None
-						} else {
-							Some(Message::CompileProgram)
-						})
-						.into();
-
-					if compile_button_disabled {
-						tooltip(
-							compile_button,
-							container(text("Set the Arduino CLI path!").size(16).color(RED))
-								.style(secondary_container_style)
-								.padding(5),
-							Position::Bottom,
-						)
-						.into()
-					} else {
-						compile_button
-					}
-				},
-			]
-			.align_y(Vertical::Center),
-			container(scrollable(
-				self.source_code_language
-					.editor_view(&self.source_code_text_content),
-			))
-			.style(panel_style)
-			.width(FillPortion(2))
-			.height(Fill),
-		]
-		.push_maybe(
-			if matches!(self.source_code_language, SourceCodeLanguage::Arduino) {
-				let path_scrollbar_padding = Padding::default().bottom(5);
-
-				Some(
+				let editor_panel: Element<Message> = column![
 					row![
-						container(text("Arduino CLI Path:")).padding(path_scrollbar_padding),
-						scrollable(match &self.arduino_cli_filepath {
-							Some(path) => text(path.to_string_lossy()),
-							None => text("not set!").color(RED),
-						})
-						.width(Fill)
-						.direction(Direction::Horizontal(
-							Scrollbar::new().width(0).scroller_width(5).spacing(5)
-						)),
-						container(
-							button("Browse")
+						text("Code Editor:  "),
+						Space::new(Fill, 0.0),
+						if self.program_up_to_date
+							|| matches!(self.program, ProgramState::Compiling)
+						{
+							Element::new(Space::new(0, 0))
+						} else {
+							let compile_button: Element<Message> = button("Compile (Ctrl+B)")
 								.style(button_style)
-								.on_press(Message::PickArduinoCLIFileDialog)
-						)
-						.padding(path_scrollbar_padding),
+								.on_press_maybe(if compile_button_disabled {
+									None
+								} else {
+									Some(Message::CompileProgram)
+								})
+								.into();
+
+							if compile_button_disabled {
+								tooltip(
+									compile_button,
+									container(
+										text("Set the Arduino CLI path!").size(16).color(RED),
+									)
+									.style(secondary_container_style)
+									.padding(5),
+									Position::Bottom,
+								)
+								.into()
+							} else {
+								compile_button
+							}
+						},
 					]
-					.spacing(10)
 					.align_y(Vertical::Center),
-				)
-			} else {
-				None
-			},
-		)
-		.into()
+					container(scrollable(editor_view))
+						.style(panel_style)
+						.width(FillPortion(2))
+						.height(Fill),
+				]
+				.push_maybe(if matches!(self.program_source, ProgramSource::Arduino) {
+					let path_scrollbar_padding = Padding::default().bottom(5);
+
+					Some(
+						row![
+							container(text("Arduino CLI Path:")).padding(path_scrollbar_padding),
+							scrollable(match &self.arduino_cli_filepath {
+								Some(path) => text(path.to_string_lossy()),
+								None => text("not set!").color(RED),
+							})
+							.width(Fill)
+							.direction(Direction::Horizontal(
+								Scrollbar::new().width(0).scroller_width(5).spacing(5)
+							)),
+							container(
+								button("Browse")
+									.style(button_style)
+									.on_press(Message::PickArduinoCLIFileDialog)
+							)
+							.padding(path_scrollbar_padding),
+						]
+						.spacing(10)
+						.align_y(Vertical::Center),
+					)
+				} else {
+					None
+				})
+				.into();
+
+				if portrait {
+					row![editor_panel, self.instructions_panel(cpu_sim)]
+						.spacing(20)
+						.into()
+				} else {
+					column![editor_panel, self.instructions_panel(cpu_sim)]
+						.spacing(20)
+						.into()
+				}
+			}
+			None => self.instructions_panel(cpu_sim),
+		}
 	}
 
 	fn instructions_panel(&self, cpu_sim: &CpuSim) -> Element<Message> {
@@ -1007,6 +1106,13 @@ impl App {
 			)
 			.on_toggle(Message::SetCpuSimRealtimeSpeed),
 			Space::new(Fill, 0.0),
+			pick_list(
+				ProgramSource::ALL,
+				Some(self.program_source),
+				Message::ChangeProgramSource
+			)
+			.style(pick_list_style)
+			.menu_style(pick_list_menu_style),
 			pick_list(CodeSample::ALL, None::<CodeSample>, Message::LoadCodeSample)
 				.placeholder("Load Code Sample")
 				.style(pick_list_style)
