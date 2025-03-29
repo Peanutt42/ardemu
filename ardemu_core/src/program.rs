@@ -95,27 +95,6 @@ impl Program {
 	pub fn get_debug_symbol(&self, address: WordAddress) -> Option<&String> {
 		self.debug_symbol_table.get(&address)
 	}
-
-	/// linear time complexity! (32-bit instructions take up two program addresses (2 words))
-	/// invalid opcodes are ALSO considered as a instruction (in the gui with a '???')
-	/// returns the index of the instruction based on the program address
-	/// returns None if the address is invalid
-	pub fn get_instruction_index(&self, address: WordAddress) -> Option<usize> {
-		let mut instruction_index = 0;
-		let mut program_address = WordAddress(0);
-		while (program_address.0 as usize) < self.flash.len() {
-			if program_address == address {
-				return Some(instruction_index);
-			}
-			instruction_index += 1;
-			if let Some(instruction) = self.get_instruction(program_address) {
-				program_address += instruction.get_word_size();
-			} else {
-				program_address += 1;
-			}
-		}
-		None
-	}
 }
 
 impl Default for Program {

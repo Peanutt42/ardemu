@@ -1,4 +1,4 @@
-use ardemu_core::PointerRegister;
+use ardemu_core::{Opcode, PointerRegister, Program, WordAddress};
 use iced::{
 	alignment::Vertical,
 	widget::{
@@ -7,7 +7,7 @@ use iced::{
 	},
 	Color, Element, Font,
 	Length::{Fill, Fixed},
-	Padding, Task,
+	Padding, Task, Theme,
 };
 use iced_aw::Spinner;
 
@@ -44,6 +44,32 @@ impl InstructionsPanel {
 		}
 	}
 
+	/// returns the index in the instructions list panel
+	/// multiple the index by INSTRUCTION_HEIGHT to get the y position of the instruction (accounting for debug symbol info)
+	fn get_instruction_index(program: &Program, address: WordAddress) -> Option<usize> {
+		let mut instruction_index = 0;
+		let mut program_address = WordAddress(0);
+		while (program_address.0 as usize) < program.flash.len() {
+			if program.get_debug_symbol(program_address).is_some() {
+				// newline + debug symbol
+				instruction_index += 2;
+			}
+
+			if program_address == address {
+				return Some(instruction_index);
+			}
+
+			instruction_index += 1;
+
+			if let Some(instruction) = program.get_instruction(program_address) {
+				program_address += instruction.get_word_size();
+			} else {
+				program_address += 1;
+			}
+		}
+		None
+	}
+
 	/// only sticks to instruction if enabled!
 	pub fn stick_to_instruction(&self, cpu_sim: &CpuSim) -> Task<Message> {
 		if !self.stick_to_current_instruction {
@@ -51,10 +77,7 @@ impl InstructionsPanel {
 		}
 
 		let cpu = &cpu_sim.cpu;
-		match cpu
-			.get_program()
-			.get_instruction_index(cpu.get_program_counter())
-		{
+		match Self::get_instruction_index(cpu.get_program(), cpu.get_program_counter()) {
 			Some(instruction_index) => scrollable::scroll_to(
 				INSTRUCTION_SCROLLABLE_ID.clone(),
 				scrollable::AbsoluteOffset {
@@ -110,128 +133,125 @@ impl InstructionsPanel {
 			.align_y(Vertical::Center),
 			container(match &app.program {
 				ProgramState::Compiled(program) => {
-					scrollable(
-						Column::with_children(
-							program
-								.iter()
-								.map(|(program_address, instruction)| {
-									let breakpoint_set_here =
-										cpu.get_breakpoints().contains(&program_address);
-									let instr_currently_executing =
-										program_counter == program_address;
-									let debug_symbol = program.get_debug_symbol(program_address);
-									let referenced_debug_symbol =
-										instruction.and_then(|instruction| {
-											instruction
-												.get_referenced_program_address(
-													program_address,
-													potential_return_address,
-													cpu.read_register_pair16(PointerRegister::Z),
-													instr_currently_executing,
-												)
-												.and_then(|referenced_program_address| {
-													let symbol = program.get_debug_symbol(
-														referenced_program_address,
-													)?;
+					let mut instructions: Vec<Element<Message>> = Vec::with_capacity(program.len());
+					for (program_address, instruction) in program.iter() {
+						let breakpoint_set_here = cpu.get_breakpoints().contains(&program_address);
+						let instr_currently_executing = program_counter == program_address;
 
-													Some(format!(
-														"{referenced_program_address}: {symbol}"
-													))
-												})
-										});
-									let debug_info = match (debug_symbol, referenced_debug_symbol) {
-										(Some(debug_symbol), Some(referenced_debug_symbol)) => {
-											format!(" ; {debug_symbol}, {referenced_debug_symbol}")
-										}
-										(Some(debug_symbol), None) => {
-											format!(" ; {debug_symbol}")
-										}
-										(None, Some(referenced_debug_symbol)) => {
-											format!(" ; {referenced_debug_symbol}")
-										}
-										(None, None) => String::new(),
-									};
-									let is_currently_referenced =
-										match currently_referenced_program_address {
-											Some(currently_referenced_program_address) => {
-												currently_referenced_program_address
-													== program_address
-											}
-											None => false,
-										};
+						let referenced_debug_symbol = instruction.and_then(|instruction| {
+							instruction
+								.get_referenced_program_address(
+									program_address,
+									potential_return_address,
+									cpu.read_register_pair16(PointerRegister::Z),
+									instr_currently_executing,
+								)
+								.and_then(|referenced_program_address| {
+									let symbol =
+										program.get_debug_symbol(referenced_program_address)?;
 
-									row![
-										tooltip(
-											button(
-												svg(ARROW_RIGHT_SVG.clone())
-													.style(|_t, s| svg::Style {
-														color: Some(match s {
-															svg::Status::Idle => Color::TRANSPARENT,
-															svg::Status::Hovered => Color::WHITE,
-														})
-													})
-													.width(16)
-													.height(16)
-											)
-											.padding(Padding::default())
-											.style(show_on_hover_button_style)
-											.on_press(Message::SkipToInstruction(program_address)),
-											container(text("Skip to instruction").size(12))
-												.style(secondary_container_style)
-												.padding(3),
-											Position::Bottom,
-										),
-										button(
-											text!("{program_address}:")
-												.font(Font::MONOSPACE)
-												.style(if is_currently_referenced {
-													primary_text_style
-												} else {
-													secondary_text_style
-												})
-										)
-										.style(move |t, s| {
-											if breakpoint_set_here {
-												if instr_currently_executing {
-													button::danger(t, s)
-												} else {
-													button::primary(t, s)
-												}
-											} else {
-												hidden_secondary_button_style(t, s)
-											}
-										})
-										.padding(Padding::new(2.5).left(5.0).right(5.0))
-										.on_press(
-											if cpu.get_breakpoints().contains(&program_address) {
-												Message::RemoveBreakpoint(program_address)
-											} else {
-												Message::AddBreakpoint(program_address)
-											}
-										),
-										row![
-											match instruction {
-												Some(instruction) => text!("{instruction}")
-													.color_maybe(if instr_currently_executing {
-														Some(Color::from_rgb(1.0, 0.0, 0.0))
-													} else {
-														None
-													}),
-												None => text("???"),
-											}
-											.font(Font::MONOSPACE),
-											text(debug_info)
-												.font(Font::MONOSPACE)
-												.style(secondary_text_style)
-										]
-									]
-									.align_y(Vertical::Center)
-									.height(INSTRUCTION_HEIGHT)
-									.into()
+									Some(format!(" ; {referenced_program_address}: {symbol}"))
 								})
-								.collect::<Vec<_>>(),
-						)
-						.padding(INSTRUCTION_SCROLLABLE_PADDING),
+						});
+						let is_currently_referenced = match currently_referenced_program_address {
+							Some(currently_referenced_program_address) => {
+								currently_referenced_program_address == program_address
+							}
+							None => false,
+						};
+
+						if let Some(debug_symbol) = program.get_debug_symbol(program_address) {
+							instructions.push(
+								column![
+									Space::new(0.0, INSTRUCTION_HEIGHT),
+									text!("{debug_symbol}:")
+										.font(Font::MONOSPACE)
+										.height(INSTRUCTION_HEIGHT)
+										.style(move |theme: &Theme| if is_currently_referenced {
+											primary_text_style(theme)
+										} else {
+											text::Style::default()
+										})
+								]
+								.into(),
+							);
+						}
+
+						let instruction_view: Element<Message> = row![
+							tooltip(
+								button(
+									svg(ARROW_RIGHT_SVG.clone())
+										.style(|_t, s| svg::Style {
+											color: Some(match s {
+												svg::Status::Idle => Color::TRANSPARENT,
+												svg::Status::Hovered => Color::WHITE,
+											})
+										})
+										.width(16)
+										.height(16)
+								)
+								.padding(Padding::default())
+								.style(show_on_hover_button_style)
+								.on_press(Message::SkipToInstruction(program_address)),
+								container(text("Skip to instruction").size(12))
+									.style(secondary_container_style)
+									.padding(3),
+								Position::Bottom,
+							),
+							button(text!("{program_address}:").font(Font::MONOSPACE).style(
+								if is_currently_referenced {
+									primary_text_style
+								} else {
+									secondary_text_style
+								}
+							))
+							.style(move |t, s| {
+								if breakpoint_set_here {
+									if instr_currently_executing {
+										button::danger(t, s)
+									} else {
+										button::primary(t, s)
+									}
+								} else {
+									hidden_secondary_button_style(t, s)
+								}
+							})
+							.padding(Padding::new(2.5).left(5.0).right(5.0))
+							.on_press(
+								if cpu.get_breakpoints().contains(&program_address) {
+									Message::RemoveBreakpoint(program_address)
+								} else {
+									Message::AddBreakpoint(program_address)
+								}
+							),
+							row![match instruction {
+								Some(instruction) => text!("{instruction}").color_maybe(
+									if instr_currently_executing {
+										Some(Color::from_rgb(1.0, 0.0, 0.0))
+									} else {
+										None
+									}
+								),
+								None => text("???"),
+							}
+							.font(Font::MONOSPACE)]
+							.push_maybe(referenced_debug_symbol.as_ref().map(
+								|referenced_debug_symbol| {
+									text!("{referenced_debug_symbol}")
+										.font(Font::MONOSPACE)
+										.style(secondary_text_style)
+								}
+							))
+						]
+						.align_y(Vertical::Center)
+						.height(INSTRUCTION_HEIGHT)
+						.into();
+
+						instructions.push(instruction_view);
+					}
+
+					scrollable(
+						Column::from_vec(instructions).padding(INSTRUCTION_SCROLLABLE_PADDING),
 					)
 					.id(INSTRUCTION_SCROLLABLE_ID.clone())
 					.direction(Direction::Both {
