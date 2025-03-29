@@ -1,126 +1,40 @@
 use std::path::PathBuf;
 
-use ardemu_core::{assemble, load_elf, load_ihex_str, Program};
-use iced::{widget::text_editor, Element, Font};
+use ardemu_core::{assemble, load_elf, load_ihex_str};
+use iced::{
+	alignment::Vertical,
+	widget::{
+		button, container, row, scrollable,
+		scrollable::{Direction, Scrollbar},
+		text, text_editor,
+	},
+	Element, Font,
+	Length::Fill,
+	Padding, Task,
+};
+use iced_aw::style::colors::RED;
 
 use crate::{
-	arduino_sketch::compile_arduino_sketch, code_editor::code_editor_keybindings, highlighter,
-	style::text_editor_style, Message,
+	arduino_sketch::compile_arduino_sketch,
+	code_editor::{code_editor_keybindings, unindent_text},
+	highlighter,
+	style::{button_style, text_editor_style},
+	Message, ProgramState,
 };
 
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum ProgramSource {
+pub enum ProgramSourceType {
 	#[default]
 	Assembly,
 	Arduino,
 	ElfFile,
 	IHexFile,
 }
-impl ProgramSource {
-	pub const ALL: &'static [ProgramSource] =
+impl ProgramSourceType {
+	pub const ALL: &'static [ProgramSourceType] =
 		&[Self::Assembly, Self::Arduino, Self::ElfFile, Self::IHexFile];
-
-	pub fn view<'a>(
-		&'a self,
-		assembly_source_code: &'a text_editor::Content,
-		arduino_source_code: &'a text_editor::Content,
-	) -> Option<Element<'a, Message>> {
-		match self {
-			Self::Assembly => Some(
-				text_editor(assembly_source_code)
-					.highlight_with::<highlighter::Highlighter>(
-						highlighter::Settings {},
-						highlighter::Highlight::to_format,
-					)
-					.font(Font::MONOSPACE)
-					.style(text_editor_style)
-					.on_action(Message::AssemblySourceCodeChanged)
-					.key_binding(move |key_press| {
-						code_editor_keybindings(key_press, Message::AssemblySourceCodeUnindent)
-					})
-					.into(),
-			),
-			Self::Arduino => Some(
-				text_editor(arduino_source_code)
-					.highlight("cpp", iced::highlighter::Theme::Base16Eighties)
-					.font(Font::MONOSPACE)
-					.style(text_editor_style)
-					.on_action(Message::ArduinoSourceCodeChanged)
-					.key_binding(move |key_press| {
-						code_editor_keybindings(key_press, Message::ArduinoSourceCodeUnindent)
-					})
-					.into(),
-			),
-			Self::ElfFile | Self::IHexFile => None,
-		}
-	}
-
-	pub fn get_source_code_text(
-		&self,
-		assembly_source_code_content: &text_editor::Content,
-		arduino_source_code_content: &text_editor::Content,
-	) -> String {
-		match self {
-			Self::Assembly => assembly_source_code_content.text(),
-			Self::Arduino => arduino_source_code_content.text(),
-			Self::ElfFile | Self::IHexFile => String::new(),
-		}
-	}
-
-	pub async fn compile(
-		self,
-		source_code: String,
-		elf_filepath: Option<PathBuf>,
-		ihex_filepath: Option<PathBuf>,
-		arduino_cli_filepath: Option<PathBuf>,
-	) -> Result<Program, String> {
-		let map_blocking_task_error =
-			|e| format!("Failed to join async blocking 'compile' task: {e}");
-
-		match self {
-			Self::Assembly => tokio::task::spawn_blocking(move || {
-				assemble(&source_code).map_err(|e| e.to_string())
-			})
-			.await
-			.map_err(map_blocking_task_error)?,
-			Self::Arduino => tokio::task::spawn_blocking(move || match arduino_cli_filepath {
-				Some(arduino_cli_filepath) => {
-					compile_arduino_sketch(&source_code, arduino_cli_filepath)
-				}
-				None => Err("Arduino CLI filepath not provided".to_string()),
-			})
-			.await
-			.map_err(map_blocking_task_error)?,
-			Self::ElfFile => match elf_filepath {
-				Some(elf_filepath) => {
-					let elf_file_content = tokio::fs::read(elf_filepath)
-						.await
-						.map_err(|e| e.to_string())?;
-					tokio::task::spawn_blocking(move || {
-						load_elf(&elf_file_content).map_err(|e| e.to_string())
-					})
-					.await
-					.map_err(map_blocking_task_error)?
-				}
-				None => Err("No elf filepath provided!".to_string()),
-			},
-			Self::IHexFile => match ihex_filepath {
-				Some(ihex_filepath) => {
-					let ihex_file_content = tokio::fs::read_to_string(ihex_filepath)
-						.await
-						.map_err(|e| e.to_string())?;
-					tokio::task::spawn_blocking(move || {
-						load_ihex_str(&ihex_file_content).map_err(|e| e.to_string())
-					})
-					.await
-					.map_err(map_blocking_task_error)?
-				}
-				None => Err("No ihex filepath provided!".to_string()),
-			},
-		}
-	}
 }
-impl std::fmt::Display for ProgramSource {
+impl std::fmt::Display for ProgramSourceType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
@@ -132,5 +46,341 @@ impl std::fmt::Display for ProgramSource {
 				Self::IHexFile => "IHex File",
 			}
 		)
+	}
+}
+
+#[derive(Debug, Clone)]
+pub enum ProgramSourceMessage {
+	Compile,
+	AssemblySourceCodeChanged(text_editor::Action),
+	AssemblySourceCodeUnindent,
+	ArduinoSourceCodeChanged(text_editor::Action),
+	ArduinoSourceCodeUnindent,
+	SetArduinoCliPath(PathBuf),
+	BrowseArduinoCliDialog,
+	BrowseArduinoCliDialogCanceled,
+}
+
+impl From<ProgramSourceMessage> for Message {
+	fn from(value: ProgramSourceMessage) -> Self {
+		Message::ProgramSourceMessage(value)
+	}
+}
+
+#[derive(Debug)]
+pub enum ProgramSource {
+	Assembly(text_editor::Content),
+	Arduino {
+		source_code_content: text_editor::Content,
+		arduino_cli_filepath: Option<PathBuf>,
+	},
+	ElfFilepath(PathBuf),
+	IHexFilepath(PathBuf),
+	ElfFile(Vec<u8>),
+	IHexFile(String),
+}
+impl ProgramSource {
+	pub fn get_type(&self) -> ProgramSourceType {
+		match self {
+			Self::Assembly(_) => ProgramSourceType::Assembly,
+			Self::Arduino { .. } => ProgramSourceType::Arduino,
+			Self::ElfFilepath(_) => ProgramSourceType::ElfFile,
+			Self::IHexFilepath(_) => ProgramSourceType::IHexFile,
+			Self::ElfFile(_) => ProgramSourceType::ElfFile,
+			Self::IHexFile(_) => ProgramSourceType::IHexFile,
+		}
+	}
+
+	pub fn update(
+		&mut self,
+		message: ProgramSourceMessage,
+		is_program_up_to_date: &mut bool,
+		program: &mut ProgramState,
+	) -> Task<Message> {
+		let map_blocking_task_error =
+			|e| format!("Failed to join async blocking 'compile' task: {e}");
+
+		match message {
+			ProgramSourceMessage::Compile => {
+				*program = ProgramState::Compiling;
+				match self {
+					Self::Assembly(source_code_content) => {
+						let source_code = source_code_content.text();
+						Task::perform(
+							async move {
+								tokio::task::spawn_blocking(move || {
+									assemble(&source_code).map_err(|e| e.to_string())
+								})
+								.await
+								.map_err(map_blocking_task_error)?
+							},
+							Message::LoadProgram,
+						)
+					}
+					Self::Arduino {
+						source_code_content,
+						arduino_cli_filepath,
+					} => match arduino_cli_filepath {
+						Some(arduino_cli_filepath) => {
+							let source_code = source_code_content.text();
+							let arduino_cli_filepath = arduino_cli_filepath.clone();
+
+							Task::perform(
+								async move {
+									tokio::task::spawn_blocking(move || {
+										compile_arduino_sketch(&source_code, arduino_cli_filepath)
+									})
+									.await
+									.map_err(map_blocking_task_error)?
+								},
+								Message::LoadProgram,
+							)
+						}
+						None => Task::done(Message::LoadProgram(Err(
+							"arduino cli filepath not set!".to_string(),
+						))),
+					},
+					Self::ElfFilepath(filepath) => {
+						let filepath = filepath.clone();
+						Task::perform(
+							async move {
+								let elf_file_content =
+									tokio::fs::read(filepath).await.map_err(|e| e.to_string())?;
+
+								tokio::task::spawn_blocking(move || {
+									load_elf(&elf_file_content).map_err(|e| e.to_string())
+								})
+								.await
+								.map_err(map_blocking_task_error)?
+							},
+							Message::LoadProgram,
+						)
+					}
+					Self::ElfFile(elf_file_content) => {
+						let elf_file_content = elf_file_content.clone();
+						Task::perform(
+							async move {
+								tokio::task::spawn_blocking(move || {
+									load_elf(&elf_file_content).map_err(|e| e.to_string())
+								})
+								.await
+								.map_err(map_blocking_task_error)?
+							},
+							Message::LoadProgram,
+						)
+					}
+					Self::IHexFilepath(filepath) => {
+						let filepath = filepath.clone();
+						Task::perform(
+							async move {
+								let ihex_file_content = tokio::fs::read_to_string(filepath)
+									.await
+									.map_err(|e| e.to_string())?;
+
+								tokio::task::spawn_blocking(move || {
+									load_ihex_str(&ihex_file_content).map_err(|e| e.to_string())
+								})
+								.await
+								.map_err(map_blocking_task_error)?
+							},
+							Message::LoadProgram,
+						)
+					}
+					Self::IHexFile(ihex_file_content) => {
+						let ihex_file_content = ihex_file_content.clone();
+						Task::perform(
+							async move {
+								tokio::task::spawn_blocking(move || {
+									load_ihex_str(&ihex_file_content).map_err(|e| e.to_string())
+								})
+								.await
+								.map_err(map_blocking_task_error)?
+							},
+							Message::LoadProgram,
+						)
+					}
+				}
+			}
+			ProgramSourceMessage::AssemblySourceCodeChanged(action) => {
+				if let ProgramSource::Assembly(source_code_content) = self {
+					let is_edit = action.is_edit();
+					source_code_content.perform(action);
+					if is_edit {
+						*is_program_up_to_date = false;
+					}
+				}
+
+				Task::none()
+			}
+			ProgramSourceMessage::AssemblySourceCodeUnindent => {
+				if let ProgramSource::Assembly(source_code_content) = self {
+					unindent_text(source_code_content);
+					*is_program_up_to_date = false;
+				}
+
+				Task::none()
+			}
+			ProgramSourceMessage::ArduinoSourceCodeChanged(action) => {
+				if let ProgramSource::Arduino {
+					source_code_content,
+					..
+				} = self
+				{
+					let is_edit = action.is_edit();
+					source_code_content.perform(action);
+					if is_edit {
+						*is_program_up_to_date = false;
+					}
+				}
+
+				Task::none()
+			}
+			ProgramSourceMessage::ArduinoSourceCodeUnindent => {
+				if let ProgramSource::Arduino {
+					source_code_content,
+					..
+				} = self
+				{
+					unindent_text(source_code_content);
+					*is_program_up_to_date = false;
+				}
+
+				Task::none()
+			}
+			ProgramSourceMessage::SetArduinoCliPath(filepath) => {
+				if let ProgramSource::Arduino {
+					arduino_cli_filepath,
+					..
+				} = self
+				{
+					*arduino_cli_filepath = Some(filepath);
+				}
+				Task::none()
+			}
+			ProgramSourceMessage::BrowseArduinoCliDialog => Task::perform(
+				rfd::AsyncFileDialog::new()
+					.set_file_name("arduino_cli")
+					.pick_file(),
+				|result| match result {
+					Some(file_handle) => {
+						ProgramSourceMessage::SetArduinoCliPath(file_handle.path().to_path_buf())
+							.into()
+					}
+					None => ProgramSourceMessage::BrowseArduinoCliDialogCanceled.into(),
+				},
+			),
+			ProgramSourceMessage::BrowseArduinoCliDialogCanceled => Task::none(),
+		}
+	}
+
+	/// (code_edtior_view, extra_view)
+	pub fn view(&self) -> (Option<Element<Message>>, Option<Element<Message>>) {
+		match self {
+			Self::Assembly(source_code_content) => (
+				Some(
+					text_editor(source_code_content)
+						.highlight_with::<highlighter::Highlighter>(
+							highlighter::Settings {},
+							highlighter::Highlight::to_format,
+						)
+						.font(Font::MONOSPACE)
+						.style(text_editor_style)
+						.on_action(|action| {
+							ProgramSourceMessage::AssemblySourceCodeChanged(action).into()
+						})
+						.key_binding(move |key_press| {
+							code_editor_keybindings(
+								key_press,
+								ProgramSourceMessage::AssemblySourceCodeUnindent.into(),
+							)
+						})
+						.into(),
+				),
+				None,
+			),
+			Self::Arduino {
+				source_code_content,
+				arduino_cli_filepath,
+			} => (
+				Some(
+					text_editor(source_code_content)
+						.highlight("cpp", iced::highlighter::Theme::Base16Eighties)
+						.font(Font::MONOSPACE)
+						.style(text_editor_style)
+						.on_action(|action| {
+							ProgramSourceMessage::ArduinoSourceCodeChanged(action).into()
+						})
+						.key_binding(move |key_press| {
+							code_editor_keybindings(
+								key_press,
+								ProgramSourceMessage::ArduinoSourceCodeUnindent.into(),
+							)
+						})
+						.into(),
+				),
+				Some({
+					let path_scrollbar_padding = Padding::default().bottom(5);
+
+					row![
+						container(text("Arduino CLI Path:")).padding(path_scrollbar_padding),
+						scrollable(match arduino_cli_filepath {
+							Some(path) => text(path.to_string_lossy()),
+							None => text("not set!").color(RED),
+						})
+						.width(Fill)
+						.direction(Direction::Horizontal(
+							Scrollbar::new().width(0).scroller_width(5).spacing(5)
+						)),
+						container(
+							button("Browse")
+								.style(button_style)
+								.on_press(ProgramSourceMessage::BrowseArduinoCliDialog.into())
+						)
+						.padding(path_scrollbar_padding),
+					]
+					.spacing(10)
+					.align_y(Vertical::Center)
+					.into()
+				}),
+			),
+			Self::ElfFile(_) | Self::IHexFile(_) | Self::ElfFilepath(_) | Self::IHexFilepath(_) => {
+				(None, None)
+			}
+		}
+	}
+
+	/// returns 'None' if arduino cli is not set in Arduino Mode
+	pub fn compile_message_maybe(&self) -> Option<Message> {
+		if matches!(
+			self,
+			Self::Arduino {
+				arduino_cli_filepath: None,
+				..
+			}
+		) {
+			None
+		} else {
+			Some(ProgramSourceMessage::Compile.into())
+		}
+	}
+}
+impl Clone for ProgramSource {
+	fn clone(&self) -> Self {
+		match self {
+			Self::Assembly(source_code_content) => {
+				Self::Assembly(text_editor::Content::with_text(&source_code_content.text()))
+			}
+			Self::Arduino {
+				source_code_content,
+				arduino_cli_filepath,
+			} => Self::Arduino {
+				source_code_content: text_editor::Content::with_text(&source_code_content.text()),
+				arduino_cli_filepath: arduino_cli_filepath.clone(),
+			},
+			Self::ElfFile(elf_file_content) => Self::ElfFile(elf_file_content.clone()),
+			Self::ElfFilepath(filepath) => Self::ElfFilepath(filepath.clone()),
+			Self::IHexFile(ihex_file_content) => Self::IHexFile(ihex_file_content.clone()),
+			Self::IHexFilepath(filepath) => Self::IHexFilepath(filepath.clone()),
+		}
 	}
 }

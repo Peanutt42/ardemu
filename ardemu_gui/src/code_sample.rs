@@ -1,4 +1,4 @@
-use ardemu_core::{assemble, load_elf, load_ihex_str, Program};
+use iced::widget::text_editor;
 
 use crate::ProgramSource;
 
@@ -24,39 +24,49 @@ impl CodeSample {
 		CodeSample::ArduinoBlinkSketch,
 	];
 
-	pub fn get_source_code(&self) -> String {
+	pub fn get_program_source(&self) -> ProgramSource {
 		match self {
-			Self::Fib8 => format!(
-				"ldi r16, 10 ; n = 10\n\n{}",
-				include_str!("../../sample_programs/fib.asm")
-			),
-			Self::Fib16 => format!(
-				"ldi r16, 10 ; n = 10\n\n{}",
-				include_str!("../../sample_programs/fib16.asm")
-			),
-			Self::RecursiveFib => format!(
-				"ldi r16, 10 ; n = 10\n\n{}",
-				include_str!("../../sample_programs/recursive_fib.asm")
-			),
-			Self::RustFibIHex | Self::RustFibElf => {
-				include_str!("../../sample_programs/rust_fib.asm").to_string()
+			Self::Fib8 => {
+				let source_code = format!(
+					"ldi r16, 10 ; n = 10\n\n{}",
+					include_str!("../../sample_programs/fib.asm")
+				);
+				ProgramSource::Assembly(text_editor::Content::with_text(&source_code))
 			}
-			Self::BlinkLED => include_str!("../../sample_programs/blink.asm").to_string(),
-			Self::ArduinoBlinkSketch => {
-				include_str!("../../sample_programs/arduino_blink_sketch/arduino_blink_sketch.ino")
-					.to_string()
+			Self::Fib16 => {
+				let source_code = format!(
+					"ldi r16, 10 ; n = 10\n\n{}",
+					include_str!("../../sample_programs/fib16.asm")
+				);
+				ProgramSource::Assembly(text_editor::Content::with_text(&source_code))
 			}
+			Self::RecursiveFib => {
+				let source_code = format!(
+					"ldi r16, 10 ; n = 10\n\n{}",
+					include_str!("../../sample_programs/recursive_fib.asm")
+				);
+				ProgramSource::Assembly(text_editor::Content::with_text(&source_code))
+			}
+			Self::BlinkLED => {
+				let source_code = include_str!("../../sample_programs/blink.asm");
+				ProgramSource::Assembly(text_editor::Content::with_text(source_code))
+			}
+			Self::RustFibIHex => ProgramSource::IHexFile(
+				include_str!("../../sample_programs/rust_fib.hex").to_string(),
+			),
+			Self::RustFibElf => ProgramSource::ElfFile(
+				include_bytes!("../../sample_programs/rust_fib.elf").to_vec(),
+			),
+			Self::ArduinoBlinkSketch => ProgramSource::ElfFile(
+				include_bytes!(
+					"../../sample_programs/arduino_blink_sketch/arduino_blink_sketch.ino.elf"
+				)
+				.to_vec(),
+			),
 		}
 	}
 
-	pub fn get_language(&self) -> ProgramSource {
-		match self {
-			Self::ArduinoBlinkSketch => ProgramSource::Arduino,
-			_ => ProgramSource::Assembly,
-		}
-	}
-
-	#[allow(clippy::unwrap_used)]
+	/*#[allow(clippy::unwrap_used)]
 	pub fn get_program(&self) -> Program {
 		match self {
 			Self::RustFibIHex => {
@@ -71,7 +81,7 @@ impl CodeSample {
 			.unwrap(),
 			_ => assemble(&self.get_source_code()).unwrap(),
 		}
-	}
+	}*/
 }
 impl std::fmt::Display for CodeSample {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
