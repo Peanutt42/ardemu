@@ -51,7 +51,9 @@ pub fn cpu_simulation_thread(
 					std::thread::sleep(cpu_frame_update_duration - compute_duration);
 				}
 			} else {
-				const BULK_STEP_COUNT: usize = 1_000_000;
+				/// extra 1 in order to avoid having a repeating pattern, looking like the sim is not running.
+				/// kind of like laminar flow
+				const BULK_STEP_COUNT: usize = 1_000_001;
 
 				for _ in 0..BULK_STEP_COUNT {
 					match cpu.step() {
