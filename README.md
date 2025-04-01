@@ -1,10 +1,20 @@
-# ardemu
+<div align="center">
+  <img src="ardemu_gui/assets/icon.svg" width=128/>
+  <h1><strong>Ardemu</strong></h1>
+  <p>
+    <strong>toy hobby project for emulating AVR CPUs</strong>
+  </p>
+</div>
+
+(Not affiliated with Arduino!)
 
 Try it out in the browser! (limited gui)
 [peanutt42.github.io/ardemu_web](https://peanutt42.github.io/ardemu_web)
 
 ![ardemu_gui](ardemu_gui/Screenshot.png)
-Run GUI with:
+
+
+#### Run GUI with:
 ```bash
 cargo r --release -p ardemu_gui
 ```
@@ -56,6 +66,14 @@ fn main() {
 
 	assert_eq!(result, 55);
 }
+```
+
+### System Installation (GUI)
+system installation not needed to run the gui!
+
+on linux:
+```bash
+./ardemu_gui/scripts/install_linux.sh
 ```
 
 ## Resources

@@ -13,7 +13,9 @@ iced = { version = "0.13.1", features = [
 	"advanced",
 	"svg",
 	"highlighter",
+	"image",
 ] }
+image = "0.24"
 iced_aw = { version = "0.12", default-features = false, features = ["spinner"] }
 tokio = { version = "1.4", features = ["rt-multi-thread", "fs"] }
 rfd = "0.15.3"

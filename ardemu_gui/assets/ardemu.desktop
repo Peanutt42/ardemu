@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ardemu
+Terminal=false
+Categories=Utility;
+Exec=$HOME/.local/bin/ardemu
+Icon=$HOME/.local/ardemu.app/icons/hicolor/512x512/apps/ardemu.png

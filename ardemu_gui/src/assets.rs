@@ -14,3 +14,5 @@ pub static ARDUINO_UNO_LED_BUILTIN_ON_SVG: LazyLock<svg::Handle> = LazyLock::new
 pub static ARDUINO_UNO_LED_POWER_ON_SVG: LazyLock<svg::Handle> = LazyLock::new(|| {
 	svg::Handle::from_memory(include_bytes!("../assets/ArduinoUno_LED_POWER_ON.svg"))
 });
+
+pub static APP_ICON_PNG_BYTES: &[u8] = include_bytes!("../assets/icon.png");

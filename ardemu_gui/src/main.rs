@@ -5,6 +5,9 @@
 #![deny(unsafe_code)]
 
 use ardemu_core::{Cpu, Program, WordAddress};
+use assets::APP_ICON_PNG_BYTES;
+#[cfg(target_os = "linux")]
+use iced::window::settings::PlatformSpecific;
 use iced::{
 	alignment::Vertical,
 	border::rounded,
@@ -13,7 +16,8 @@ use iced::{
 		button, checkbox, column, container, pick_list, responsive, row, scrollable, text,
 		text_editor, tooltip, tooltip::Position, Space,
 	},
-	window, Element, Font,
+	window::{self, icon},
+	Element, Font,
 	Length::{Fill, FillPortion},
 	Subscription, Task, Theme,
 };
@@ -489,5 +493,14 @@ fn main() -> iced::Result {
 	iced::application(App::title, App::update, App::view)
 		.theme(App::theme)
 		.subscription(App::subscription)
+		.window(window::Settings {
+			icon: icon::from_file_data(APP_ICON_PNG_BYTES, Some(image::ImageFormat::Png)).ok(),
+			#[cfg(target_os = "linux")]
+			platform_specific: PlatformSpecific {
+				application_id: "ardemu".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		})
 		.run_with(App::new)
 }
