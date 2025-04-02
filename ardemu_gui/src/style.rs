@@ -138,18 +138,3 @@ pub fn pick_list_menu_style(theme: &Theme) -> menu::Style {
 		selected_background: theme.extended_palette().primary.strong.color.into(),
 	}
 }
-
-pub fn show_on_hover_button_style(theme: &Theme, status: button::Status) -> button::Style {
-	match status {
-		button::Status::Active | button::Status::Disabled => button::Style {
-			background: None,
-			text_color: Color::TRANSPARENT,
-			..button::secondary(theme, status)
-		},
-		button::Status::Hovered | button::Status::Pressed => button::Style {
-			background: Some(theme.extended_palette().secondary.base.color.into()),
-			text_color: Color::WHITE,
-			..button::secondary(theme, status)
-		},
-	}
-}

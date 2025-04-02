@@ -2,8 +2,8 @@ use ardemu_core::{Opcode, PointerRegister, Program, WordAddress};
 use iced::{
 	alignment::Vertical,
 	widget::{
-		button, checkbox, column, container, row, scrollable, scrollable::Direction, svg, text,
-		tooltip, tooltip::Position, Column, Space,
+		button, checkbox, column, container, mouse_area, row, scrollable, scrollable::Direction,
+		svg, text, tooltip, tooltip::Position, Column, Space,
 	},
 	Color, Element, Font,
 	Length::{Fill, Fixed},
@@ -15,7 +15,7 @@ use crate::{
 	assets::ARROW_RIGHT_SVG,
 	style::{
 		hidden_secondary_button_style, panel_style, primary_text_style, secondary_container_style,
-		secondary_text_style, show_on_hover_button_style,
+		secondary_text_style,
 	},
 	App, CpuSim, Message, ProgramState, INSTRUCTION_HEIGHT, INSTRUCTION_SCROLLABLE_ID,
 	INSTRUCTION_SCROLLABLE_PADDING,
@@ -24,6 +24,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum InstructionsPanelMessage {
 	SetStickToCurrentInstruction(bool),
+	InstructionHovered(Option<WordAddress>),
 }
 
 impl From<InstructionsPanelMessage> for Message {
@@ -35,12 +36,14 @@ impl From<InstructionsPanelMessage> for Message {
 #[derive(Debug, Clone)]
 pub struct InstructionsPanel {
 	stick_to_current_instruction: bool,
+	hovered_program_address: Option<WordAddress>,
 }
 
 impl InstructionsPanel {
 	pub fn new() -> Self {
 		Self {
 			stick_to_current_instruction: false,
+			hovered_program_address: None,
 		}
 	}
 
@@ -95,6 +98,10 @@ impl InstructionsPanel {
 			InstructionsPanelMessage::SetStickToCurrentInstruction(stick) => {
 				self.stick_to_current_instruction = stick;
 				self.stick_to_instruction(cpu_sim)
+			}
+			InstructionsPanelMessage::InstructionHovered(program_address) => {
+				self.hovered_program_address = program_address;
+				Task::none()
 			}
 		}
 	}
@@ -177,74 +184,86 @@ impl InstructionsPanel {
 							);
 						}
 
-						let instruction_view: Element<Message> = row![
-							tooltip(
-								button(
-									svg(ARROW_RIGHT_SVG.clone())
-										.style(|_t, s| svg::Style {
-											color: Some(match s {
-												svg::Status::Idle => Color::TRANSPARENT,
-												svg::Status::Hovered => Color::WHITE,
-											})
-										})
-										.width(16)
-										.height(16)
-								)
-								.padding(Padding::default())
-								.style(show_on_hover_button_style)
-								.on_press(Message::SkipToInstruction(program_address)),
-								container(text("Skip to instruction").size(12))
-									.style(secondary_container_style)
-									.padding(3),
-								Position::Bottom,
-							),
-							button(text!("{program_address}:").font(Font::MONOSPACE).style(
-								if is_currently_referenced {
-									primary_text_style
-								} else {
-									secondary_text_style
-								}
-							))
-							.style(move |t, s| {
-								if breakpoint_set_here {
-									if instr_currently_executing {
-										button::danger(t, s)
-									} else {
-										button::primary(t, s)
+						let instruction_view: Element<Message> = mouse_area(
+							row![
+								match self.hovered_program_address {
+									Some(hovered_program_address)
+										if program_address == hovered_program_address =>
+									{
+										tooltip(
+											button(
+												svg(ARROW_RIGHT_SVG.clone())
+													.style(|_t, _s| -> svg::Style {
+														svg::Style {
+															color: Some(Color::WHITE),
+														}
+													})
+													.width(16)
+													.height(16),
+											)
+											.padding(Padding::default())
+											.style(hidden_secondary_button_style)
+											.on_press(Message::SkipToInstruction(program_address)),
+											container(text("Skip to instruction").size(12))
+												.style(secondary_container_style)
+												.padding(3),
+											Position::Bottom,
+										)
+										.into()
 									}
-								} else {
-									hidden_secondary_button_style(t, s)
-								}
-							})
-							.padding(Padding::new(2.5).left(5.0).right(5.0))
-							.on_press(
-								if cpu.get_breakpoints().contains(&program_address) {
+									_ => Element::new(Space::new(16, 16)),
+								},
+								button(text!("{program_address}:").font(Font::MONOSPACE).style(
+									if is_currently_referenced {
+										primary_text_style
+									} else {
+										secondary_text_style
+									},
+								),)
+								.style(move |t, s| {
+									if breakpoint_set_here {
+										if instr_currently_executing {
+											button::danger(t, s)
+										} else {
+											button::primary(t, s)
+										}
+									} else {
+										hidden_secondary_button_style(t, s)
+									}
+								})
+								.padding(Padding::new(2.5).left(5.0).right(5.0))
+								.on_press(if cpu.get_breakpoints().contains(&program_address) {
 									Message::RemoveBreakpoint(program_address)
 								} else {
 									Message::AddBreakpoint(program_address)
+								},),
+								row![match instruction {
+									Some(instruction) => text!("{instruction}").color_maybe(
+										if instr_currently_executing {
+											Some(Color::from_rgb(1.0, 0.0, 0.0))
+										} else {
+											None
+										}
+									),
+									None => text("???"),
 								}
-							),
-							row![match instruction {
-								Some(instruction) => text!("{instruction}").color_maybe(
-									if instr_currently_executing {
-										Some(Color::from_rgb(1.0, 0.0, 0.0))
-									} else {
-										None
-									}
-								),
-								None => text("???"),
-							}
-							.font(Font::MONOSPACE)]
-							.push_maybe(referenced_debug_symbol.as_ref().map(
-								|referenced_debug_symbol| {
-									text!("{referenced_debug_symbol}")
-										.font(Font::MONOSPACE)
-										.style(secondary_text_style)
-								}
-							))
-						]
-						.align_y(Vertical::Center)
-						.height(INSTRUCTION_HEIGHT)
+								.font(Font::MONOSPACE)]
+								.push_maybe(referenced_debug_symbol.as_ref().map(
+									|referenced_debug_symbol| {
+										text!("{referenced_debug_symbol}")
+											.font(Font::MONOSPACE)
+											.style(secondary_text_style)
+									},
+								)),
+							]
+							.align_y(Vertical::Center)
+							.height(INSTRUCTION_HEIGHT),
+						)
+						.on_move(move |_point| {
+							InstructionsPanelMessage::InstructionHovered(Some(program_address))
+								.into()
+						})
+						.on_exit(InstructionsPanelMessage::InstructionHovered(None).into())
 						.into();
 
 						instructions.push(instruction_view);
