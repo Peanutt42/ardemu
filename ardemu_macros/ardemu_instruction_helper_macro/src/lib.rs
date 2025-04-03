@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-	parse_macro_input, punctuated::Punctuated, token::Comma, Data, DataEnum, DeriveInput, Field,
-	Fields,
+	parse_macro_input, punctuated::Punctuated, token::Comma, Data, DataEnum, DeriveInput, Error,
+	Field, Fields, Path,
 };
 
 #[proc_macro_derive(ParseAsmInstruction, attributes(skip_parse_asm_instruction))]
@@ -13,7 +13,12 @@ pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 
 	let variants = match &input.data {
 		Data::Enum(DataEnum { variants, .. }) => variants,
-		_ => panic!("DisplayInstruction can only be derived for enums"),
+		_ => {
+			return quote! {
+				compiler_error!("DisplayInstruction can only be derived for enums")
+			}
+			.into();
+		}
 	};
 
 	let arms = variants.iter().map(|variant| {
@@ -34,7 +39,12 @@ pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 				let fields_len = fields.len();
 
 				let parsed_fields = fields.iter().enumerate().map(|(index, field)| {
-					let field_ident = field.ident.as_ref().unwrap();
+					let field_ident = match field.ident.as_ref() {
+						Some(ident) => ident,
+						None => {
+							return quote! { compiler_error!("Field name is required") };
+						}
+					};
 					let field_type = &field.ty;
 					quote! {
 						#field_ident: #field_type::parse_operand(operands[#index])?
@@ -66,7 +76,8 @@ pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 					}
 				}
 			}
-			_ => panic!("Unnamed variant fields are not supported"),
+			_ => Error::new_spanned(&variant.fields, "Unnamed variant fields are not supported")
+				.into_compile_error(),
 		}
 	});
 
@@ -89,7 +100,7 @@ pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 
 /// Implements the 'std::fmt::Display' trait for the Instruction enum.
 /// Variant names are converted to uppercase and variant fields are displayed as parameters.
-#[proc_macro_derive(DisplayInstruction)]
+#[proc_macro_derive(DisplayInstruction, attributes(override_display))]
 pub fn derive_display_instruction(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 
@@ -97,31 +108,89 @@ pub fn derive_display_instruction(input: TokenStream) -> TokenStream {
 
 	let variants = match &input.data {
 		Data::Enum(DataEnum { variants, .. }) => variants,
-		_ => panic!("DisplayInstruction can only be derived for enums"),
+		_ => {
+			return quote! { compile_error!("DisplayInstruction can only be derived for enums") }
+				.into();
+		}
 	};
 
 	let arms = variants.iter().map(|variant| {
+		let mut overriden_display_function_path: Option<Path> = None;
+		for attr in &variant.attrs {
+			if !attr.path().is_ident("override_display") {
+				continue;
+			}
+
+			let lit: syn::LitStr = match attr.parse_args() {
+				Ok(lit) => lit,
+				Err(e) => return e.to_compile_error(),
+			};
+
+			let path: Path = match syn::parse_str(&lit.value()) {
+				Ok(path) => path,
+				Err(e) => return e.to_compile_error(),
+			};
+
+			overriden_display_function_path = Some(path);
+			break;
+		}
+
 		let variant_ident = &variant.ident;
+
 		let fields = match &variant.fields {
 			Fields::Named(fields) => &fields.named,
 			Fields::Unit => &Punctuated::new(),
-			_ => panic!("Unnamed variant fields are not supported"),
+			_ => {
+				return Error::new_spanned(
+					&variant.fields,
+					"Unnamed variant fields are not supported",
+				)
+				.into_compile_error()
+			}
 		};
 
-		let variant_name_upper = variant_ident.to_string().to_uppercase();
+		let display_function = match overriden_display_function_path {
+			Some(overriden_display_function_path) => {
+				let args = fields.iter().map(|field| match field.ident.as_ref() {
+					Some(ident) => quote! { #ident },
+					None => Error::new_spanned(
+						field,
+						"Unnamed variant fields (operands) are not supported",
+					)
+					.into_compile_error(),
+				});
 
-		let placeholders: Vec<String> = fields
-			.iter()
-			.map(|field| {
-				let field_ident = field.ident.as_ref().unwrap().to_string();
-				format!("{{{0}}}", field_ident)
-			})
-			.collect();
+				if fields.is_empty() {
+					quote! {
+						#overriden_display_function_path(f)
+					}
+				} else {
+					quote! {
+						#overriden_display_function_path(f, #(#args),*)
+					}
+				}
+			}
+			None => {
+				let variant_name_upper = variant_ident.to_string().to_uppercase();
 
-		let format_str = if placeholders.is_empty() {
-			variant_name_upper
-		} else {
-			format!("{variant_name_upper} {}", placeholders.join(", "))
+				let placeholders: Vec<String> = fields
+					.iter()
+					.map(|field| {
+						let field_ident = field.ident.as_ref().unwrap().to_string();
+						format!("{{{0}}}", field_ident)
+					})
+					.collect();
+
+				let format_str = if placeholders.is_empty() {
+					variant_name_upper
+				} else {
+					format!("{variant_name_upper} {}", placeholders.join(", "))
+				};
+
+				quote! {
+					write!(f, #format_str)
+				}
+			}
 		};
 
 		let field_patterns = fields.iter().map(|field| {
@@ -130,7 +199,7 @@ pub fn derive_display_instruction(input: TokenStream) -> TokenStream {
 		});
 
 		quote! {
-			#enum_name::#variant_ident { #(#field_patterns),* } => write!(f, #format_str),
+			#enum_name::#variant_ident { #(#field_patterns),* } => #display_function,
 		}
 	});
 
@@ -199,7 +268,10 @@ pub fn referenced_registers_derive(input: TokenStream) -> TokenStream {
 
 	let variants = match &input.data {
 		Data::Enum(data) => &data.variants,
-		_ => panic!("ReferencedRegisters can only be derived for enums"),
+		_ => {
+			return quote! { compile_error!("ReferencedRegisters can only be derived for enums") }
+				.into()
+		}
 	};
 
 	let match_arms = variants.iter().map(|variant| {

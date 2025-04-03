@@ -230,8 +230,10 @@ pub enum Instruction {
 		value: Imm8,
 	},
 	/// set cpu flag
+	#[override_display("custom_fmt_bset")]
 	Bset { flag_type: FlagType },
 	/// clear cpu flag
+	#[override_display("custom_fmt_bclr")]
 	Bclr { flag_type: FlagType },
 	/// Set bit in register (argument is the limited io address 0x00 - 0x1F)
 	Sbi {
@@ -397,6 +399,32 @@ impl Instruction {
 			}
 			_ => None,
 		}
+	}
+}
+
+fn custom_fmt_bset(f: &mut std::fmt::Formatter<'_>, flag_type: &FlagType) -> std::fmt::Result {
+	match flag_type {
+		FlagType::Carry => write!(f, "SEC"),
+		FlagType::Zero => write!(f, "SEZ"),
+		FlagType::Negative => write!(f, "SEN"),
+		FlagType::Overflow => write!(f, "SEV"),
+		FlagType::Sign => write!(f, "SES"),
+		FlagType::HalfCarry => write!(f, "SEH"),
+		FlagType::BitCopy => write!(f, "SET"),
+		FlagType::Interrupt => write!(f, "CLI"),
+	}
+}
+
+fn custom_fmt_bclr(f: &mut std::fmt::Formatter<'_>, flag_type: &FlagType) -> std::fmt::Result {
+	match flag_type {
+		FlagType::Carry => write!(f, "CLC"),
+		FlagType::Zero => write!(f, "CLZ"),
+		FlagType::Negative => write!(f, "CLN"),
+		FlagType::Overflow => write!(f, "CLV"),
+		FlagType::Sign => write!(f, "CLS"),
+		FlagType::HalfCarry => write!(f, "CLH"),
+		FlagType::BitCopy => write!(f, "CLT"),
+		FlagType::Interrupt => write!(f, "CLI"),
 	}
 }
 
