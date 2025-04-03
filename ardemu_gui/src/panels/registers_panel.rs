@@ -5,7 +5,7 @@ use ardemu_core::{
 use iced::{
 	alignment::Vertical,
 	widget::{column, container, row, scrollable, text, Column},
-	Font, Padding,
+	Padding,
 };
 
 use crate::{
@@ -38,14 +38,12 @@ impl RegistersPanel {
 					let padding_space = if *reg <= R9 { " " } else { "" };
 
 					row![
-						text!("{reg}: {padding_space}").font(Font::MONOSPACE).style(
-							if referenced {
-								primary_text_style
-							} else {
-								secondary_text_style
-							}
-						),
-						text!("{value}").font(Font::MONOSPACE)
+						text!("{reg}: {padding_space}").style(if referenced {
+							primary_text_style
+						} else {
+							secondary_text_style
+						}),
+						text!("{value}")
 					]
 					.align_y(Vertical::Center)
 					.into()

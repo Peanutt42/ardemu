@@ -5,7 +5,7 @@ use iced::{
 		button, checkbox, column, container, mouse_area, row, scrollable, scrollable::Direction,
 		svg, text, tooltip, tooltip::Position, Column, Space,
 	},
-	Color, Element, Font,
+	Color, Element,
 	Length::{Fill, Fixed},
 	Padding, Task, Theme,
 };
@@ -171,14 +171,13 @@ impl InstructionsPanel {
 							instructions.push(
 								column![
 									Space::new(0.0, INSTRUCTION_HEIGHT),
-									text!("{debug_symbol}:")
-										.font(Font::MONOSPACE)
-										.height(INSTRUCTION_HEIGHT)
-										.style(move |theme: &Theme| if is_currently_referenced {
+									text!("{debug_symbol}:").height(INSTRUCTION_HEIGHT).style(
+										move |theme: &Theme| if is_currently_referenced {
 											primary_text_style(theme)
 										} else {
 											text::Style::default()
-										})
+										}
+									)
 								]
 								.into(),
 							);
@@ -213,7 +212,7 @@ impl InstructionsPanel {
 									}
 									_ => Element::new(Space::new(16, 16)),
 								},
-								button(text!("{program_address}:").font(Font::MONOSPACE).style(
+								button(text!("{program_address}:").style(
 									if is_currently_referenced {
 										primary_text_style
 									} else {
@@ -246,12 +245,10 @@ impl InstructionsPanel {
 										}
 									),
 									None => text("???"),
-								}
-								.font(Font::MONOSPACE)]
+								}]
 								.push_maybe(referenced_debug_symbol.as_ref().map(
 									|referenced_debug_symbol| {
 										text!("{referenced_debug_symbol}")
-											.font(Font::MONOSPACE)
 											.style(secondary_text_style)
 									},
 								)),

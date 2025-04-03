@@ -8,7 +8,7 @@ use iced::{
 		scrollable::{Direction, Scrollbar},
 		text, text_editor,
 	},
-	Element, Font,
+	Element,
 	Length::Fill,
 	Padding, Task,
 };
@@ -283,7 +283,6 @@ impl ProgramSource {
 							highlighter::Settings {},
 							highlighter::Highlight::to_format,
 						)
-						.font(Font::MONOSPACE)
 						.style(text_editor_style)
 						.on_action(|action| {
 							ProgramSourceMessage::AssemblySourceCodeChanged(action).into()
@@ -305,7 +304,6 @@ impl ProgramSource {
 				Some(
 					text_editor(source_code_content)
 						.highlight("cpp", iced::highlighter::Theme::Base16Eighties)
-						.font(Font::MONOSPACE)
 						.style(text_editor_style)
 						.on_action(|action| {
 							ProgramSourceMessage::ArduinoSourceCodeChanged(action).into()

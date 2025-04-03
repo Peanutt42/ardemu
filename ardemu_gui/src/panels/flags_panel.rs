@@ -1,7 +1,7 @@
 use ardemu_core::FlagType;
 use iced::{
 	widget::{column, container, scrollable, text, Column},
-	Color, Font, Theme,
+	Color, Theme,
 };
 
 use crate::{
@@ -26,17 +26,13 @@ impl FlagsPanel {
 				Column::with_children(FlagType::ALL.iter().map(|flag_type| {
 					let flag_set = cpu.flags().get(*flag_type);
 
-					container(
-						text!("{flag_type}: {}", flag_set as u8)
-							.font(Font::MONOSPACE)
-							.style(if flag_set {
-								move |_t: &Theme| text::Style {
-									color: Some(Color::WHITE),
-								}
-							} else {
-								secondary_text_style
-							}),
-					)
+					container(text!("{flag_type}: {}", flag_set as u8).style(if flag_set {
+						move |_t: &Theme| text::Style {
+							color: Some(Color::WHITE),
+						}
+					} else {
+						secondary_text_style
+					}))
 					.style(move |t: &Theme| {
 						if flag_set {
 							container::Style {

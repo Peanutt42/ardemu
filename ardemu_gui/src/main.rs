@@ -5,7 +5,7 @@
 #![deny(unsafe_code)]
 
 use ardemu_core::{Cpu, Program, WordAddress};
-use assets::APP_ICON_PNG_BYTES;
+use assets::{APP_ICON_PNG_BYTES, JETBRAINS_MONO_FONT, JETBRAINS_MONO_FONT_BYTES};
 #[cfg(target_os = "linux")]
 use iced::window::settings::PlatformSpecific;
 use iced::{
@@ -493,6 +493,8 @@ fn main() -> iced::Result {
 	iced::application(App::title, App::update, App::view)
 		.theme(App::theme)
 		.subscription(App::subscription)
+		.font(JETBRAINS_MONO_FONT_BYTES)
+		.default_font(JETBRAINS_MONO_FONT)
 		.window(window::Settings {
 			icon: icon::from_file_data(APP_ICON_PNG_BYTES, Some(image::ImageFormat::Png)).ok(),
 			#[cfg(target_os = "linux")]

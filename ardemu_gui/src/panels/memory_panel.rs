@@ -5,7 +5,7 @@ use iced::{
 	widget::{
 		column, container, mouse_area, responsive, row, scrollable, text, text_input, Column, Row,
 	},
-	Color, Element, Font,
+	Color, Element,
 	Length::Fill,
 	Padding, Task, Theme,
 };
@@ -39,6 +39,7 @@ impl MemoryPanel {
 	const ROW_HEIGHT: f32 = 18.0;
 	const DATA_COLUMN_SPACING: f32 = 5.0;
 	const BYTES_PER_ROW: u32 = 16;
+	const SMALL_FONT_SIZE: f32 = 15.0;
 
 	pub fn new() -> Self {
 		Self {
@@ -113,7 +114,7 @@ impl MemoryPanel {
 						.on_input(|input| MemoryPanelMessage::ChangeStartAddressInput(input).into())
 						.on_submit(MemoryPanelMessage::ChangeStartAddressFromInput.into()),
 					]
-					.width(200.0)
+					.width(250.0)
 					.align_y(Vertical::Center),
 					row![
 						container(Column::with_children((-1..num_rows as i16).map(|index| {
@@ -126,7 +127,7 @@ impl MemoryPanel {
 											as u16,
 									);
 									text!("{address} ")
-										.font(Font::MONOSPACE)
+										.size(Self::SMALL_FONT_SIZE)
 										.style(secondary_text_style)
 								}
 							}
@@ -142,7 +143,7 @@ impl MemoryPanel {
 								container(
 									Row::with_children((0..Self::BYTES_PER_ROW).map(|index| {
 										text!("{index:2x}")
-											.font(Font::MONOSPACE)
+											.size(Self::SMALL_FONT_SIZE)
 											.style(secondary_text_style)
 											.into()
 									}))
@@ -178,20 +179,20 @@ impl MemoryPanel {
 
 												match data.get(byte_index as usize) {
 													Some(byte_value) => text!("{byte_value:2x}")
+														.size(Self::SMALL_FONT_SIZE)
 														.style(if referenced {
 															primary_text_style
 														} else {
 															move |_t: &Theme| text::Style::default()
 														}),
-													None => text("--"),
+													None => text("--").size(Self::SMALL_FONT_SIZE),
 												}
-												.font(Font::MONOSPACE)
 												.into()
 											}),
 										)
 										.spacing(Self::DATA_COLUMN_SPACING)
 										.into(),
-										Err(e) => text!("{e}").font(Font::MONOSPACE).into(),
+										Err(e) => text!("{e}").size(Self::SMALL_FONT_SIZE).into(),
 									};
 
 									container(data_view)

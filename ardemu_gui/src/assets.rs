@@ -1,4 +1,4 @@
-use iced::widget::svg;
+use iced::{font::Family, widget::svg, Font};
 use std::sync::LazyLock;
 
 pub static ARROW_RIGHT_SVG: LazyLock<svg::Handle> =
@@ -16,3 +16,9 @@ pub static ARDUINO_UNO_LED_POWER_ON_SVG: LazyLock<svg::Handle> = LazyLock::new(|
 });
 
 pub static APP_ICON_PNG_BYTES: &[u8] = include_bytes!("../assets/icon.png");
+
+pub static JETBRAINS_MONO_FONT: Font = Font {
+	family: Family::Name("JetBrains Mono"),
+	..Font::DEFAULT
+};
+pub static JETBRAINS_MONO_FONT_BYTES: &[u8] = include_bytes!("../assets/JetBrainsMono-Regular.ttf");
