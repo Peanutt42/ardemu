@@ -18,6 +18,7 @@ use crate::{
 	arduino_sketch::compile_arduino_sketch,
 	code_editor::{code_editor_keybindings, unindent_text},
 	highlighter,
+	settings::Settings,
 	style::{button_style, text_editor_style},
 	Message, ProgramState,
 };
@@ -56,7 +57,6 @@ pub enum ProgramSourceMessage {
 	AssemblySourceCodeUnindent,
 	ArduinoSourceCodeChanged(text_editor::Action),
 	ArduinoSourceCodeUnindent,
-	SetArduinoCliPath(PathBuf),
 	BrowseArduinoCliDialog,
 	BrowseArduinoCliDialogCanceled,
 }
@@ -70,10 +70,7 @@ impl From<ProgramSourceMessage> for Message {
 #[derive(Debug)]
 pub enum ProgramSource {
 	Assembly(text_editor::Content),
-	Arduino {
-		source_code_content: text_editor::Content,
-		arduino_cli_filepath: Option<PathBuf>,
-	},
+	Arduino(text_editor::Content),
 	ElfFilepath(PathBuf),
 	IHexFilepath(PathBuf),
 	ElfFile(Vec<u8>),
@@ -91,11 +88,31 @@ impl ProgramSource {
 		}
 	}
 
+	pub fn default_assembly_source_code() -> Self {
+		Self::Assembly(text_editor::Content::new())
+	}
+
+	pub fn default_arduino_sketch_source_code() -> Self {
+		Self::Arduino(text_editor::Content::with_text(
+			r"
+void setup() {
+  // put your setup code here, to run once:
+
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
+}",
+		))
+	}
+
 	pub fn update(
 		&mut self,
 		message: ProgramSourceMessage,
 		is_program_up_to_date: &mut bool,
 		program: &mut ProgramState,
+		settings: &Settings,
 	) -> Task<Message> {
 		let map_blocking_task_error =
 			|e| format!("Failed to join async blocking 'compile' task: {e}");
@@ -117,10 +134,7 @@ impl ProgramSource {
 							Message::LoadProgram,
 						)
 					}
-					Self::Arduino {
-						source_code_content,
-						arduino_cli_filepath,
-					} => match arduino_cli_filepath {
+					Self::Arduino(source_code_content) => match &settings.arduino_cli_filepath {
 						Some(arduino_cli_filepath) => {
 							let source_code = source_code_content.text();
 							let arduino_cli_filepath = arduino_cli_filepath.clone();
@@ -221,11 +235,7 @@ impl ProgramSource {
 				Task::none()
 			}
 			ProgramSourceMessage::ArduinoSourceCodeChanged(action) => {
-				if let ProgramSource::Arduino {
-					source_code_content,
-					..
-				} = self
-				{
+				if let ProgramSource::Arduino(source_code_content) = self {
 					let is_edit = action.is_edit();
 					source_code_content.perform(action);
 					if is_edit {
@@ -236,25 +246,11 @@ impl ProgramSource {
 				Task::none()
 			}
 			ProgramSourceMessage::ArduinoSourceCodeUnindent => {
-				if let ProgramSource::Arduino {
-					source_code_content,
-					..
-				} = self
-				{
+				if let ProgramSource::Arduino(source_code_content) = self {
 					unindent_text(source_code_content);
 					*is_program_up_to_date = false;
 				}
 
-				Task::none()
-			}
-			ProgramSourceMessage::SetArduinoCliPath(filepath) => {
-				if let ProgramSource::Arduino {
-					arduino_cli_filepath,
-					..
-				} = self
-				{
-					*arduino_cli_filepath = Some(filepath);
-				}
 				Task::none()
 			}
 			ProgramSourceMessage::BrowseArduinoCliDialog => Task::perform(
@@ -263,8 +259,7 @@ impl ProgramSource {
 					.pick_file(),
 				|result| match result {
 					Some(file_handle) => {
-						ProgramSourceMessage::SetArduinoCliPath(file_handle.path().to_path_buf())
-							.into()
+						Message::SetArduinoCliPath(file_handle.path().to_path_buf())
 					}
 					None => ProgramSourceMessage::BrowseArduinoCliDialogCanceled.into(),
 				},
@@ -274,7 +269,10 @@ impl ProgramSource {
 	}
 
 	/// (code_edtior_view, extra_view)
-	pub fn view(&self) -> (Option<Element<Message>>, Option<Element<Message>>) {
+	pub fn view<'a>(
+		&'a self,
+		settings: &'a Settings,
+	) -> (Option<Element<'a, Message>>, Option<Element<'a, Message>>) {
 		match self {
 			Self::Assembly(source_code_content) => (
 				Some(
@@ -297,10 +295,7 @@ impl ProgramSource {
 				),
 				None,
 			),
-			Self::Arduino {
-				source_code_content,
-				arduino_cli_filepath,
-			} => (
+			Self::Arduino(source_code_content) => (
 				Some(
 					text_editor(source_code_content)
 						.highlight("cpp", iced::highlighter::Theme::Base16Eighties)
@@ -321,7 +316,7 @@ impl ProgramSource {
 
 					row![
 						container(text("Arduino CLI Path:")).padding(path_scrollbar_padding),
-						scrollable(match arduino_cli_filepath {
+						scrollable(match &settings.arduino_cli_filepath {
 							Some(path) => text(path.to_string_lossy()),
 							None => text("not set!").color(RED),
 						})
@@ -348,14 +343,8 @@ impl ProgramSource {
 	}
 
 	/// returns 'None' if arduino cli is not set in Arduino Mode
-	pub fn compile_message_maybe(&self) -> Option<Message> {
-		if matches!(
-			self,
-			Self::Arduino {
-				arduino_cli_filepath: None,
-				..
-			}
-		) {
+	pub fn compile_message_maybe(&self, settings: &Settings) -> Option<Message> {
+		if matches!(self, Self::Arduino(_)) && settings.arduino_cli_filepath.is_none() {
 			None
 		} else {
 			Some(ProgramSourceMessage::Compile.into())
@@ -368,13 +357,9 @@ impl Clone for ProgramSource {
 			Self::Assembly(source_code_content) => {
 				Self::Assembly(text_editor::Content::with_text(&source_code_content.text()))
 			}
-			Self::Arduino {
-				source_code_content,
-				arduino_cli_filepath,
-			} => Self::Arduino {
-				source_code_content: text_editor::Content::with_text(&source_code_content.text()),
-				arduino_cli_filepath: arduino_cli_filepath.clone(),
-			},
+			Self::Arduino(source_code_content) => {
+				Self::Arduino(text_editor::Content::with_text(&source_code_content.text()))
+			}
 			Self::ElfFile(elf_file_content) => Self::ElfFile(elf_file_content.clone()),
 			Self::ElfFilepath(filepath) => Self::ElfFilepath(filepath.clone()),
 			Self::IHexFile(ihex_file_content) => Self::IHexFile(ihex_file_content.clone()),

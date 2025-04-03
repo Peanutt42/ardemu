@@ -13,8 +13,8 @@ use iced::{
 	border::rounded,
 	keyboard,
 	widget::{
-		button, checkbox, column, container, pick_list, responsive, row, scrollable, text,
-		text_editor, tooltip, tooltip::Position, Space,
+		button, checkbox, column, container, pick_list, responsive, row, scrollable, text, tooltip,
+		tooltip::Position, Space,
 	},
 	window::{self, icon},
 	Element, Font,
@@ -22,7 +22,7 @@ use iced::{
 	Subscription, Task, Theme,
 };
 use iced_aw::style::colors::RED;
-use std::sync::LazyLock;
+use std::{path::PathBuf, sync::LazyLock};
 
 mod cpu_sim_thread;
 use cpu_sim_thread::cpu_simulation_thread;
@@ -53,6 +53,9 @@ use panels::{
 	ArduinoBoardPanel, FlagsPanel, InstructionsPanel, InstructionsPanelMessage, MemoryPanel,
 	MemoryPanelMessage, RegistersPanel,
 };
+
+mod settings;
+use settings::Settings;
 
 static INSTRUCTION_SCROLLABLE_ID: LazyLock<scrollable::Id> = LazyLock::new(scrollable::Id::unique);
 const INSTRUCTION_SCROLLABLE_PADDING: f32 = 10.0;
@@ -86,6 +89,7 @@ enum ProgramState {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone)]
 enum Message {
+	SetArduinoCliPath(PathBuf),
 	ResetCpu,
 	SimulateCpu(bool),
 	ToggleSimulateCpu,
@@ -107,6 +111,7 @@ enum Message {
 
 #[derive(Debug)]
 struct App {
+	settings: Settings,
 	simulate_cpu: bool,
 	cpu_sim_realtime_speed: bool,
 	cpu_sim: triple_buffer::Output<CpuSim>,
@@ -123,8 +128,10 @@ struct App {
 	flags_panel: FlagsPanel,
 }
 
-impl Default for App {
-	fn default() -> Self {
+impl App {
+	fn new() -> (Self, Task<Message>) {
+		let settings = Settings::load().unwrap_or_default();
+
 		let code_sample = CodeSample::Fib8;
 		let program = Program::default();
 		let cpu = Cpu::new(program.clone());
@@ -137,7 +144,8 @@ impl Default for App {
 
 		std::thread::spawn(move || cpu_simulation_thread(receiver, cpu, writable_cpu_sim));
 
-		Self {
+		let mut app = Self {
+			settings,
 			simulate_cpu: false,
 			cpu_sim_realtime_speed: false,
 			cpu_sim: readable_cpu_sim,
@@ -151,13 +159,7 @@ impl Default for App {
 			arduino_board_panel: ArduinoBoardPanel::new(),
 			registers_panel: RegistersPanel::new(),
 			flags_panel: FlagsPanel::new(),
-		}
-	}
-}
-
-impl App {
-	fn new() -> (Self, Task<Message>) {
-		let mut app = App::default();
+		};
 		let task = app.update(ProgramSourceMessage::Compile.into());
 		(app, task)
 	}
@@ -210,6 +212,11 @@ impl App {
 
 	fn update(&mut self, message: Message) -> Task<Message> {
 		match message {
+			Message::SetArduinoCliPath(filepath) => {
+				self.settings.arduino_cli_filepath = Some(filepath);
+				self.settings.save();
+				Task::none()
+			}
 			Message::SimulateCpu(simulate_cpu) => {
 				self.simulate_cpu = simulate_cpu;
 				self.send_cpu_sim_message(CpuSimMessage::SetSimulating(simulate_cpu))
@@ -245,14 +252,11 @@ impl App {
 				self.program_up_to_date = false;
 				let change_program_source_task = match new_program_source_type {
 					ProgramSourceType::Assembly => self.update(Message::ChangeProgramSource(
-						ProgramSource::Assembly(text_editor::Content::new()),
+						ProgramSource::default_assembly_source_code(),
 					)),
-					ProgramSourceType::Arduino => {
-						self.update(Message::ChangeProgramSource(ProgramSource::Arduino {
-							source_code_content: text_editor::Content::new(),
-							arduino_cli_filepath: None,
-						}))
-					}
+					ProgramSourceType::Arduino => self.update(Message::ChangeProgramSource(
+						ProgramSource::default_arduino_sketch_source_code(),
+					)),
 					ProgramSourceType::ElfFile => Task::perform(
 						rfd::AsyncFileDialog::new()
 							.add_filter("Elf (.elf)", &["elf"])
@@ -282,10 +286,12 @@ impl App {
 				self.program_source = new_program_source;
 				self.update(Message::ResetCpu)
 			}
-			Message::ProgramSourceMessage(message) => {
-				self.program_source
-					.update(message, &mut self.program_up_to_date, &mut self.program)
-			}
+			Message::ProgramSourceMessage(message) => self.program_source.update(
+				message,
+				&mut self.program_up_to_date,
+				&mut self.program,
+				&self.settings,
+			),
 			Message::LoadCodeSample(code_sample) => {
 				self.program_source = code_sample.get_program_source();
 				self.program_up_to_date = false;
@@ -351,9 +357,10 @@ impl App {
 	fn program_panels(&self, portrait: bool) -> Element<Message> {
 		let instructions_panel_view = self.instructions_panel.view(self);
 
-		match self.program_source.view() {
+		match self.program_source.view(&self.settings) {
 			(Some(editor_view), optional_extra_view) => {
-				let compile_message_maybe = self.program_source.compile_message_maybe();
+				let compile_message_maybe =
+					self.program_source.compile_message_maybe(&self.settings);
 
 				let editor_panel: Element<Message> = column![
 					row![

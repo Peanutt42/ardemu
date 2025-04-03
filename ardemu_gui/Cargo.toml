@@ -18,4 +18,7 @@ iced = { version = "0.13.1", features = [
 image = "0.24"
 iced_aw = { version = "0.12", default-features = false, features = ["spinner"] }
 tokio = { version = "1.4", features = ["rt-multi-thread", "fs"] }
+serde = { version = "1.0", features = ["derive"] }
 rfd = "0.15.3"
+directories = "6.0"
+toml = "0.8.2"
