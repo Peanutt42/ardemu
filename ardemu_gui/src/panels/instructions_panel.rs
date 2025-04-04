@@ -1,9 +1,9 @@
-use ardemu_core::{Opcode, PointerRegister, Program, WordAddress};
+use ardemu_core::{Cpu, Opcode, PointerRegister, Program, WordAddress};
 use iced::{
 	alignment::Vertical,
 	widget::{
-		button, checkbox, column, container, mouse_area, row, scrollable, scrollable::Direction,
-		svg, text, tooltip, tooltip::Position, Column, Space,
+		button, checkbox, column, container, mouse_area, rich_text, row, scrollable,
+		scrollable::Direction, svg, text, text::Span, tooltip, tooltip::Position, Column, Space,
 	},
 	Color, Element,
 	Length::{Fill, Fixed},
@@ -25,6 +25,7 @@ use crate::{
 pub enum InstructionsPanelMessage {
 	SetStickToCurrentInstruction(bool),
 	InstructionHovered(Option<WordAddress>),
+	GoToInstruction(WordAddress),
 }
 
 impl From<InstructionsPanelMessage> for Message {
@@ -73,22 +74,24 @@ impl InstructionsPanel {
 		None
 	}
 
+	fn scroll_to_instruction(&self, instruction_index: usize) -> Task<Message> {
+		scrollable::scroll_to(
+			INSTRUCTION_SCROLLABLE_ID.clone(),
+			scrollable::AbsoluteOffset {
+				x: 0.0,
+				y: INSTRUCTION_SCROLLABLE_PADDING + INSTRUCTION_HEIGHT * instruction_index as f32,
+			},
+		)
+	}
+
 	/// only sticks to instruction if enabled!
-	pub fn stick_to_instruction(&self, cpu_sim: &CpuSim) -> Task<Message> {
+	pub fn stick_to_instruction(&self, cpu: &Cpu) -> Task<Message> {
 		if !self.stick_to_current_instruction {
 			return Task::none();
 		}
 
-		let cpu = &cpu_sim.cpu;
 		match Self::get_instruction_index(cpu.get_program(), cpu.get_program_counter()) {
-			Some(instruction_index) => scrollable::scroll_to(
-				INSTRUCTION_SCROLLABLE_ID.clone(),
-				scrollable::AbsoluteOffset {
-					x: 0.0,
-					y: INSTRUCTION_SCROLLABLE_PADDING
-						+ INSTRUCTION_HEIGHT * instruction_index as f32,
-				},
-			),
+			Some(instruction_index) => self.scroll_to_instruction(instruction_index),
 			None => Task::none(),
 		}
 	}
@@ -97,16 +100,24 @@ impl InstructionsPanel {
 		match message {
 			InstructionsPanelMessage::SetStickToCurrentInstruction(stick) => {
 				self.stick_to_current_instruction = stick;
-				self.stick_to_instruction(cpu_sim)
+				self.stick_to_instruction(&cpu_sim.cpu)
 			}
 			InstructionsPanelMessage::InstructionHovered(program_address) => {
 				self.hovered_program_address = program_address;
 				Task::none()
 			}
+			InstructionsPanelMessage::GoToInstruction(program_address) => {
+				match Self::get_instruction_index(cpu_sim.cpu.get_program(), program_address) {
+					Some(instruction_index) => {
+						self.scroll_to_instruction(instruction_index.saturating_sub(1))
+					}
+					None => Task::none(),
+				}
+			}
 		}
 	}
 
-	pub fn view(&self, app: &App) -> Element<Message> {
+	pub fn view<'a>(&'a self, app: &'a App) -> Element<'a, Message> {
 		let cpu_sim = app.cpu_sim.peek_output_buffer();
 		let cpu = &cpu_sim.cpu;
 		let program_counter = cpu.get_program_counter();
@@ -145,6 +156,7 @@ impl InstructionsPanel {
 						let breakpoint_set_here = cpu.get_breakpoints().contains(&program_address);
 						let instr_currently_executing = program_counter == program_address;
 
+						// (program_address, symbol)
 						let referenced_debug_symbol = instruction.and_then(|instruction| {
 							instruction
 								.get_referenced_program_address(
@@ -157,7 +169,7 @@ impl InstructionsPanel {
 									let symbol =
 										program.get_debug_symbol(referenced_program_address)?;
 
-									Some(format!(" ; {referenced_program_address}: {symbol}"))
+									Some((referenced_program_address, symbol))
 								})
 						});
 						let is_currently_referenced = match currently_referenced_program_address {
@@ -247,9 +259,20 @@ impl InstructionsPanel {
 									None => text("???"),
 								}]
 								.push_maybe(referenced_debug_symbol.as_ref().map(
-									|referenced_debug_symbol| {
-										text!("{referenced_debug_symbol}")
+									|(referenced_program_address, referenced_debug_symbol)| {
+										row![
+											text!(" ; {referenced_program_address}: ")
+												.style(secondary_text_style),
+											rich_text![Span::new(
+												(*referenced_debug_symbol).clone()
+											)
+											.link(Message::from(
+												InstructionsPanelMessage::GoToInstruction(
+													*referenced_program_address,
+												)
+											))]
 											.style(secondary_text_style)
+										]
 									},
 								)),
 							]

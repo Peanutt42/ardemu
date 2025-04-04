@@ -207,7 +207,7 @@ impl App {
 		};
 		self.cpu_sim_dirty = true;
 		self.instructions_panel
-			.stick_to_instruction(self.cpu_sim.read())
+			.stick_to_instruction(&self.cpu_sim.read().cpu)
 	}
 
 	fn update(&mut self, message: Message) -> Task<Message> {
@@ -301,7 +301,7 @@ impl App {
 				if self.cpu_sim.update() {
 					self.cpu_sim_dirty = false;
 					self.instructions_panel
-						.stick_to_instruction(self.cpu_sim.peek_output_buffer())
+						.stick_to_instruction(&self.cpu_sim.peek_output_buffer().cpu)
 				} else {
 					Task::none()
 				}
