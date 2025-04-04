@@ -6,10 +6,9 @@ use iced::{
 		scrollable::Direction, svg, text, text::Span, tooltip, tooltip::Position, Column, Space,
 	},
 	Color, Element,
-	Length::{Fill, Fixed},
+	Length::Fill,
 	Padding, Task, Theme,
 };
-use iced_aw::Spinner;
 
 use crate::{
 	assets::ARROW_RIGHT_SVG,
@@ -139,6 +138,8 @@ impl InstructionsPanel {
 					"Instructions:{}",
 					if app.program_up_to_date {
 						""
+					} else if matches!(app.program, ProgramState::Compiling { .. }) {
+						" compiling..."
 					} else {
 						" (compile to reflect changes!)"
 					}
@@ -301,20 +302,17 @@ impl InstructionsPanel {
 					.height(Fill)
 					.into()
 				}
-				ProgramState::Compiling => {
-					container(
-						row![
-							Spinner::new()
-								.width(Fixed(25.0))
-								.height(Fixed(25.0))
-								.circle_radius(3.0),
-							text("Compiling"),
-						]
-						.spacing(20)
-						.align_y(Vertical::Center),
+				ProgramState::Compiling { cli_output } => {
+					scrollable(
+						container(match &cli_output {
+							Some(cli_output) => text(cli_output),
+							None => text(""),
+						})
+						.padding(10),
 					)
-					.center(Fill)
-					.padding(10)
+					.width(Fill)
+					.height(Fill)
+					.anchor_bottom()
 					.into()
 				}
 				ProgramState::Error(e) => Element::new(

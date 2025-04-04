@@ -1,14 +1,28 @@
-use std::{
-	borrow::Cow,
-	path::PathBuf,
-	process::{Command, Stdio},
-};
-
 use ardemu_core::{load_elf, Program};
+use iced::{
+	futures::{channel::mpsc::Sender, SinkExt, Stream},
+	stream,
+};
+use std::{path::PathBuf, process::Stdio};
+use tokio::{io::AsyncBufReadExt, process::Command};
 
-pub fn compile_arduino_sketch(
-	source_code: &str,
+use crate::{program_source::ProgramSourceMessage, Message};
+
+pub fn compile_arduino_sketch_stream(
+	source_code: String,
 	arduino_cli_filepath: PathBuf,
+) -> impl Stream<Item = Message> {
+	stream::channel(100, |mut output| async move {
+		let program = compile_arduino_sketch(source_code, arduino_cli_filepath, &mut output).await;
+
+		let _ = output.send(Message::LoadProgram(program)).await;
+	})
+}
+
+async fn compile_arduino_sketch(
+	source_code: String,
+	arduino_cli_filepath: PathBuf,
+	output: &mut Sender<Message>,
 ) -> Result<Program, String> {
 	let temp_arduino_sketch_dir = std::env::temp_dir().join("ardemu_arduino_sketch");
 	std::fs::create_dir_all(&temp_arduino_sketch_dir).map_err(|e| e.to_string())?;
@@ -19,7 +33,7 @@ pub fn compile_arduino_sketch(
 	let temp_arduino_sketch_file = temp_arduino_sketch_dir.join("ardemu_arduino_sketch.ino");
 	std::fs::write(&temp_arduino_sketch_file, source_code).map_err(|e| e.to_string())?;
 
-	let compile_command_output = Command::new(arduino_cli_filepath)
+	let mut compile_command_child_process = Command::new(arduino_cli_filepath)
 		.args([
 			"compile",
 			"-b",
@@ -35,24 +49,39 @@ pub fn compile_arduino_sketch(
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.spawn()
-		.map_err(|e| e.to_string())?
+		.map_err(|e| e.to_string())?;
+
+	let mut output_clone = output.clone();
+	let std_out_thread = compile_command_child_process.stdout.take().map(|stdout| {
+		tokio::spawn(async move {
+			let mut reader = tokio::io::BufReader::new(stdout);
+			let mut line = String::new();
+			while let Ok(bytes_read) = reader.read_line(&mut line).await {
+				if bytes_read == 0 {
+					break;
+				}
+				let _ = output_clone
+					.send(ProgramSourceMessage::CompileCliOutput(std::mem::take(&mut line)).into())
+					.await;
+			}
+		})
+	});
+
+	let compile_command_output = compile_command_child_process
 		.wait_with_output()
+		.await
 		.map_err(|e| e.to_string())?;
 
 	if !compile_command_output.status.success() {
-		return Err(format!(
-			"Arduino compilation failed (non-zero exit code):{}{}",
-			if compile_command_output.stderr.is_empty() {
-				Cow::Borrowed("")
-			} else {
-				String::from_utf8_lossy(&compile_command_output.stderr)
-			},
-			if compile_command_output.stdout.is_empty() {
-				Cow::Borrowed("")
-			} else {
-				String::from_utf8_lossy(&compile_command_output.stdout)
-			}
-		));
+		return Err(if compile_command_output.stderr.is_empty() {
+			"Arduino compilation failed (non-zero exit code): no stderr output!".to_string()
+		} else {
+			String::from_utf8_lossy(&compile_command_output.stderr).to_string()
+		});
+	}
+
+	if let Some(std_out_thread) = std_out_thread {
+		let _ = std_out_thread.await;
 	}
 
 	let output_elf_filepath = temp_arduino_sketch_output_dir.join("ardemu_arduino_sketch.ino.elf");
@@ -62,5 +91,6 @@ pub fn compile_arduino_sketch(
 	let program = load_elf(&output_elf_content).map_err(|e| e.to_string())?;
 
 	std::fs::remove_dir_all(&temp_arduino_sketch_dir).map_err(|e| e.to_string())?;
+
 	Ok(program)
 }

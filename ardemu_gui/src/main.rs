@@ -81,7 +81,7 @@ enum CpuSimMessage {
 
 #[derive(Debug, Clone)]
 enum ProgramState {
-	Compiling,
+	Compiling { cli_output: Option<String> },
 	Compiled(Program),
 	Error(String),
 }
@@ -173,7 +173,7 @@ impl App {
 			ProgramState::Compiled(_) if self.simulate_cpu => {
 				window::frames().map(|_| Message::UpdateCpuState)
 			}
-			ProgramState::Compiling => window::frames().map(|_| Message::UpdateCpuState),
+			ProgramState::Compiling { .. } => window::frames().map(|_| Message::UpdateCpuState),
 			_ => {
 				if self.cpu_sim_dirty {
 					window::frames().map(|_| Message::UpdateCpuState)
@@ -367,7 +367,7 @@ impl App {
 						text("Code Editor:  "),
 						Space::new(Fill, 0.0),
 						if self.program_up_to_date
-							|| matches!(self.program, ProgramState::Compiling)
+							|| matches!(self.program, ProgramState::Compiling { .. })
 						{
 							Element::new(Space::new(0, 0))
 						} else {

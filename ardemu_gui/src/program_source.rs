@@ -15,7 +15,7 @@ use iced::{
 use iced_aw::style::colors::RED;
 
 use crate::{
-	arduino_sketch::compile_arduino_sketch,
+	arduino_sketch::compile_arduino_sketch_stream,
 	code_editor::{code_editor_keybindings, unindent_text},
 	highlighter,
 	settings::Settings,
@@ -53,6 +53,7 @@ impl std::fmt::Display for ProgramSourceType {
 #[derive(Debug, Clone)]
 pub enum ProgramSourceMessage {
 	Compile,
+	CompileCliOutput(String),
 	AssemblySourceCodeChanged(text_editor::Action),
 	AssemblySourceCodeUnindent,
 	ArduinoSourceCodeChanged(text_editor::Action),
@@ -119,7 +120,13 @@ void loop() {
 
 		match message {
 			ProgramSourceMessage::Compile => {
-				*program = ProgramState::Compiling;
+				*program = ProgramState::Compiling {
+					cli_output: if matches!(self, Self::Arduino(_)) {
+						Some(String::new())
+					} else {
+						None
+					},
+				};
 				match self {
 					Self::Assembly(source_code_content) => {
 						let source_code = source_code_content.text();
@@ -139,7 +146,7 @@ void loop() {
 							let source_code = source_code_content.text();
 							let arduino_cli_filepath = arduino_cli_filepath.clone();
 
-							Task::perform(
+							/*Task::perform(
 								async move {
 									tokio::task::spawn_blocking(move || {
 										compile_arduino_sketch(&source_code, arduino_cli_filepath)
@@ -148,7 +155,11 @@ void loop() {
 									.map_err(map_blocking_task_error)?
 								},
 								Message::LoadProgram,
-							)
+							)*/
+							Task::stream(compile_arduino_sketch_stream(
+								source_code,
+								arduino_cli_filepath,
+							))
 						}
 						None => Task::done(Message::LoadProgram(Err(
 							"arduino cli filepath not set!".to_string(),
@@ -214,6 +225,15 @@ void loop() {
 						)
 					}
 				}
+			}
+			ProgramSourceMessage::CompileCliOutput(output) => {
+				if let ProgramState::Compiling {
+					cli_output: Some(cli_output),
+				} = program
+				{
+					cli_output.push_str(&output);
+				}
+				Task::none()
 			}
 			ProgramSourceMessage::AssemblySourceCodeChanged(action) => {
 				if let ProgramSource::Assembly(source_code_content) = self {
