@@ -100,6 +100,7 @@ enum Message {
 	LoadProgram(Result<Program, String>),
 	ChangeProgramSourceType(ProgramSourceType),
 	ChangeProgramSource(ProgramSource),
+	ChangeAndCompileProgramSource(ProgramSource),
 	ProgramSourceMessage(ProgramSourceMessage),
 	LoadCodeSample(CodeSample),
 	UpdateCpuState,
@@ -250,19 +251,23 @@ impl App {
 			Message::ChangeProgramSourceType(new_program_source_type) => {
 				let previous_program_source = self.program_source.clone();
 				self.program_up_to_date = false;
-				let change_program_source_task = match new_program_source_type {
-					ProgramSourceType::Assembly => self.update(Message::ChangeProgramSource(
-						ProgramSource::default_assembly_source_code(),
-					)),
-					ProgramSourceType::Arduino => self.update(Message::ChangeProgramSource(
-						ProgramSource::default_arduino_sketch_source_code(),
-					)),
+				match new_program_source_type {
+					ProgramSourceType::Assembly => {
+						self.update(Message::ChangeAndCompileProgramSource(
+							ProgramSource::default_assembly_source_code(),
+						))
+					}
+					ProgramSourceType::Arduino => {
+						self.update(Message::ChangeAndCompileProgramSource(
+							ProgramSource::default_arduino_sketch_source_code(),
+						))
+					}
 					ProgramSourceType::ElfFile => Task::perform(
 						rfd::AsyncFileDialog::new()
 							.add_filter("Elf (.elf)", &["elf"])
 							.pick_file(),
 						move |result| match result {
-							Some(file_handle) => Message::ChangeProgramSource(
+							Some(file_handle) => Message::ChangeAndCompileProgramSource(
 								ProgramSource::ElfFilepath(file_handle.path().to_path_buf()),
 							),
 							None => Message::ChangeProgramSource(previous_program_source.clone()),
@@ -273,19 +278,21 @@ impl App {
 							.add_filter("IHex (.hex)", &["hex"])
 							.pick_file(),
 						move |result| match result {
-							Some(file_handle) => Message::ChangeProgramSource(
+							Some(file_handle) => Message::ChangeAndCompileProgramSource(
 								ProgramSource::IHexFilepath(file_handle.path().to_path_buf()),
 							),
 							None => Message::ChangeProgramSource(previous_program_source.clone()),
 						},
 					),
-				};
-				change_program_source_task.chain(self.update(ProgramSourceMessage::Compile.into()))
+				}
 			}
 			Message::ChangeProgramSource(new_program_source) => {
 				self.program_source = new_program_source;
 				self.update(Message::ResetCpu)
 			}
+			Message::ChangeAndCompileProgramSource(new_program_source) => self
+				.update(Message::ChangeProgramSource(new_program_source))
+				.chain(self.update(ProgramSourceMessage::Compile.into())),
 			Message::ProgramSourceMessage(message) => self.program_source.update(
 				message,
 				&mut self.program_up_to_date,
