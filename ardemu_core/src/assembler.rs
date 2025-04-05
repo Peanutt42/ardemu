@@ -73,17 +73,18 @@ where
 
 fn split_mnemonic_operands(line: &str) -> (String, Vec<&str>) {
 	let parts: Vec<&str> = line.split_whitespace().collect();
-	if parts.is_empty() {
-		return (String::new(), Vec::new());
+	match parts.split_first() {
+		Some((mnemonic, operands)) => {
+			let operands = operands
+				.iter()
+				.flat_map(|s| s.split(','))
+				.map(|s| s.trim())
+				.filter(|s| !s.is_empty())
+				.collect();
+			(mnemonic.to_string(), operands)
+		}
+		None => (String::new(), Vec::new()),
 	}
-	let mnemonic = parts[0].to_string();
-	let operands = parts[1..]
-		.iter()
-		.flat_map(|s| s.split(','))
-		.map(|s| s.trim())
-		.filter(|s| !s.is_empty())
-		.collect();
-	(mnemonic, operands)
 }
 
 /// Intermediate representation of an instruction before the whole source code is parsed.
@@ -128,37 +129,37 @@ impl IntermediateInstruction {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|word_address| Instruction::RCall {
-				word_offset: ((word_address.0 as i32 - program_address.0 as i32) as i16).into(),
+				word_offset: (word_address.0 as i64 - program_address.0 as i64).into(),
 			}),
 			Self::Breq {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Breq {
-				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
+				word_offset: (address.0 as i64 - program_address.0 as i64).into(),
 			}),
 			Self::Brne {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brne {
-				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
+				word_offset: (address.0 as i64 - program_address.0 as i64).into(),
 			}),
 			Self::Brlt {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brlt {
-				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
+				word_offset: (address.0 as i64 - program_address.0 as i64).into(),
 			}),
 			Self::Brcs {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brcs {
-				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
+				word_offset: (address.0 as i64 - program_address.0 as i64).into(),
 			}),
 			Self::Brcc {
 				symbol,
 				line_number,
 			} => resolve_symbol(symbol, line_number).map(|address| Instruction::Brcc {
-				word_offset: ((address.0 as i32 - program_address.0 as i32) as i8).into(),
+				word_offset: (address.0 as i64 - program_address.0 as i64).into(),
 			}),
 			Self::Instruction(instruction) => Ok(instruction),
 		}
@@ -185,8 +186,8 @@ impl From<Instruction> for IntermediateInstruction {
 }
 
 fn parse_single_symbol(operands: &[&str]) -> Result<String, AsmParseErrorType> {
-	match operands.len() {
-		1 => Ok(operands[0].to_string()),
+	match operands.first() {
+		Some(operand) if operands.len() == 1 => Ok(operand.to_string()),
 		_ => Err(AsmParseErrorType::InvalidArgumentCount {
 			expected_count: 1,
 			actual_count: operands.len(),

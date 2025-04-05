@@ -54,6 +54,7 @@ fn load_debug_symbol_table(
 			if st_type == STT_NOTYPE || st_type == STT_OBJECT || st_type == STT_FUNC {
 				if let Ok(name) = string_table.get(symbol.st_name as usize) {
 					// 1 word = 2 bytes
+					#[allow(clippy::cast_possible_truncation)]
 					let address = WordAddress((symbol.st_value / 2) as u32);
 					let st_bind = symbol.st_bind();
 					match debug_symbol_table.get_mut(&address) {

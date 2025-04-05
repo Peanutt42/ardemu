@@ -120,16 +120,18 @@ impl InstructionsPanel {
 		let cpu_sim = app.cpu_sim.peek_output_buffer();
 		let cpu = &cpu_sim.cpu;
 		let program_counter = cpu.get_program_counter();
-		let potential_return_address = cpu.peek_return_address();
+		let potential_return_address = cpu.peek_return_address().ok();
 
 		let currently_referenced_program_address =
 			cpu.get_current_instruction().and_then(|instruction| {
-				instruction.get_referenced_program_address(
-					program_counter,
-					potential_return_address,
-					cpu.read_register_pair16(PointerRegister::Z),
-					true,
-				)
+				potential_return_address.and_then(|potential_return_address| {
+					instruction.get_referenced_program_address(
+						program_counter,
+						potential_return_address,
+						cpu.read_register_pair16(PointerRegister::Z),
+						true,
+					)
+				})
 			});
 
 		column![
@@ -159,19 +161,21 @@ impl InstructionsPanel {
 
 						// (program_address, symbol)
 						let referenced_debug_symbol = instruction.and_then(|instruction| {
-							instruction
-								.get_referenced_program_address(
-									program_address,
-									potential_return_address,
-									cpu.read_register_pair16(PointerRegister::Z),
-									instr_currently_executing,
-								)
-								.and_then(|referenced_program_address| {
-									let symbol =
-										program.get_debug_symbol(referenced_program_address)?;
+							potential_return_address.and_then(|potential_return_address| {
+								instruction
+									.get_referenced_program_address(
+										program_address,
+										potential_return_address,
+										cpu.read_register_pair16(PointerRegister::Z),
+										instr_currently_executing,
+									)
+									.and_then(|referenced_program_address| {
+										let symbol =
+											program.get_debug_symbol(referenced_program_address)?;
 
-									Some((referenced_program_address, symbol))
-								})
+										Some((referenced_program_address, symbol))
+									})
+							})
 						});
 						let is_currently_referenced = match currently_referenced_program_address {
 							Some(currently_referenced_program_address) => {

@@ -152,6 +152,7 @@ impl WordAddress {
 }
 impl From<i32> for WordOffset16 {
 	fn from(value: i32) -> Self {
+		#[allow(clippy::cast_possible_truncation)]
 		Self(value as i16)
 	}
 }
@@ -160,9 +161,21 @@ impl From<WordOffset16> for i32 {
 		value.0 as i32
 	}
 }
+impl From<i64> for WordOffset16 {
+	fn from(value: i64) -> Self {
+		#[allow(clippy::cast_possible_truncation)]
+		Self(value as i16)
+	}
+}
 impl From<WordOffset8> for WordOffset16 {
 	fn from(value: WordOffset8) -> Self {
 		Self(value.0 as i16)
+	}
+}
+impl From<i64> for WordOffset8 {
+	fn from(value: i64) -> Self {
+		#[allow(clippy::cast_possible_truncation)]
+		Self(value as i8)
 	}
 }
 
@@ -240,12 +253,18 @@ define_register!(
 impl Register {
 	/// this will not panic, enforced by the type
 	pub fn read_from(&self, registers: &[u8; Self::COUNT]) -> u8 {
-		registers[*self as usize]
+		match registers.get(*self as usize) {
+			Some(value) => *value,
+			None => unreachable!("Register value should not be higher than Register::COUNT"),
+		}
 	}
 
 	/// this will not panic, enforced by the type
 	pub fn write_in(&self, registers: &mut [u8; Self::COUNT], value: u8) {
-		registers[*self as usize] = value;
+		match registers.get_mut(*self as usize) {
+			Some(reg) => *reg = value,
+			None => unreachable!("Register value should not be higher than Register::COUNT"),
+		}
 	}
 }
 

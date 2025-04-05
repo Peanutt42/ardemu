@@ -53,11 +53,14 @@ impl Program {
 		}
 
 		let mut flash = Vec::with_capacity(code.len() / 2);
-		for i in 0..code.len() / 2 {
-			let low = code[i * 2];
-			let high = code[i * 2 + 1];
-			let word = u8s_to_u16(low, high);
-			flash.push(word);
+		for low_high in code.chunks(2) {
+			match low_high {
+				[low, high] => {
+					let word = u8s_to_u16(*low, *high);
+					flash.push(word);
+				}
+				_ => unreachable!("chunks(2) should only return slices of length 2"),
+			}
 		}
 		Ok(flash)
 	}

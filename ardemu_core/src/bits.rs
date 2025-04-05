@@ -24,7 +24,7 @@ pub fn set_bit_in_u16(value: u16, bit: u16, bit_value: bool) -> u16 {
 
 /// [low, high]
 pub fn u8s_from_u16(value: u16) -> [u8; 2] {
-	let low_value = value as u8;
+	let low_value = (value & 0x00FF) as u8;
 	let high_value = (value >> 8) as u8;
 	[low_value, high_value]
 }

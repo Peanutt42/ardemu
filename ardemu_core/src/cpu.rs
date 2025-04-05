@@ -183,7 +183,7 @@ impl Cpu {
 		if self.stack_pointer <= Self::STACK_END_ADDRESS {
 			return Err(CpuError::StackOverflow);
 		}
-		self.sram[self.stack_pointer as usize] = value;
+		self.write_ram(self.stack_pointer, value)?;
 		self.stack_pointer -= 1;
 		Ok(())
 	}
@@ -192,10 +192,11 @@ impl Cpu {
 		if self.stack_pointer > Self::STACK_START_ADDRESS {
 			return Err(CpuError::StackUnderflow);
 		}
-		let value = self.sram[self.stack_pointer as usize];
+		let value = self.read_ram(self.stack_pointer)?;
 		Ok(value)
 	}
 	fn push_address(&mut self, address: WordAddress) -> Result<(), CpuError> {
+		#[allow(clippy::cast_possible_truncation)]
 		let [low, high] = u8s_from_u16(address.0 as u16);
 		self.push(low)?;
 		self.push(high)?;
@@ -208,10 +209,10 @@ impl Cpu {
 	}
 	/// returns the return address in the stack that would be popped if the Ret instruction would be executed
 	/// this will return invalid word addresses if the stack does not have a return address to be popped
-	pub fn peek_return_address(&self) -> WordAddress {
-		let high = self.sram[self.stack_pointer as usize + 1];
-		let low = self.sram[self.stack_pointer as usize + 2];
-		u8s_to_u16(low, high).into()
+	pub fn peek_return_address(&self) -> Result<WordAddress, CpuError> {
+		let high = self.read_ram(self.stack_pointer + 1)?;
+		let low = self.read_ram(self.stack_pointer + 2)?;
+		Ok(u8s_to_u16(low, high).into())
 	}
 
 	fn get_next_instruction_word_size(&self) -> u8 {

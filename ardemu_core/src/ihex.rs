@@ -6,11 +6,14 @@ pub fn load_ihex_str(ihex_content: &str) -> Result<Program, LoadIHexError> {
 	let mut flash_binary = Vec::new();
 	let ihex_reader = Reader::new(ihex_content);
 	for record in ihex_reader {
-		if let Record::Data { value, offset } = record? {
+		if let Record::Data { mut value, offset } = record? {
 			if flash_binary.len() < offset as usize + value.len() {
 				flash_binary.resize(offset as usize + value.len(), 0);
 			}
-			flash_binary[offset as usize..offset as usize + value.len()].copy_from_slice(&value);
+			value.swap_with_slice(match flash_binary.get_mut(offset as usize..) {
+				Some(slice) => slice,
+				None => unreachable!("should have been resized enough to not panic!"),
+			});
 		}
 	}
 

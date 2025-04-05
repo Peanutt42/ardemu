@@ -42,6 +42,7 @@ impl Opcode for Instruction {
 		fn load_rd5_rr5(opcode_16bit: u16) -> Option<(Register, Register)> {
 			let d5 = ((opcode_16bit >> 4) & 0x1f) as u8;
 			let rd5 = Register::try_from(d5).ok()?;
+			#[allow(clippy::cast_possible_truncation)]
 			let r5 = (((opcode_16bit >> 5) & 0x10) | (opcode_16bit & 0xf)) as u8;
 			let rr5 = Register::try_from(r5).ok()?;
 			Some((rd5, rr5))
@@ -52,6 +53,7 @@ impl Opcode for Instruction {
 			let d4 = ((opcode_16bit >> 4) & 0xf) as u8;
 			// upper registers start at R16
 			let rd4 = UpperRegister::try_from(d4 + UpperRegister::R16 as u8).ok()?;
+			#[allow(clippy::cast_possible_truncation)]
 			let k8 = (((opcode_16bit & 0x0f00) >> 4) | (opcode_16bit & 0xf)) as u8;
 			Some((rd4, k8.into()))
 		}
@@ -60,6 +62,7 @@ impl Opcode for Instruction {
 		fn load_rr5_a6(opcode_16bit: u16) -> Option<(Register, Imm8)> {
 			let r5 = ((opcode_16bit & 0x1f0) >> 4) as u8;
 			let rr5 = Register::try_from(r5).ok()?;
+			#[allow(clippy::cast_possible_truncation)]
 			let a6 = (((opcode_16bit & 0x0600) >> 5) | (opcode_16bit & 0xf)) as u8;
 			Some((rr5, a6.into()))
 		}
@@ -69,9 +72,9 @@ impl Opcode for Instruction {
 			let k12 = opcode_16bit & 0x0fff;
 			let negative = (k12 & 0x0800) != 0;
 			if negative {
-				(k12 | 0xF000) as i16
+				(k12 | 0xF000) as i32
 			} else {
-				k12 as i16
+				k12 as i32
 			}
 			.into()
 		}
@@ -102,6 +105,7 @@ impl Opcode for Instruction {
 		/// ____ ____ kkdd kkkk
 		fn load_rd2_k6(opcode_16bit: u16) -> Option<(WordRegister, Imm8)> {
 			let rd2 = ((opcode_16bit & 0x0030) >> 4) as u8;
+			#[allow(clippy::cast_possible_truncation)]
 			let k6 = (((opcode_16bit & 0x00c0) >> 2) | (opcode_16bit & 0x000f)) as u8;
 			// rd2 = 0 means WordRegister::R24
 			// rd2 = 1 means WordRegister::R26
@@ -138,6 +142,7 @@ impl Opcode for Instruction {
 		fn load_k7(opcode_16bit: u16) -> WordOffset8 {
 			let k7 = (opcode_16bit & 0x03f8) >> 3;
 			let negative = (k7 & 0x40) != 0;
+			#[allow(clippy::cast_possible_truncation)]
 			if negative {
 				(k7 | 0x80) as i8
 			} else {
@@ -586,6 +591,7 @@ impl Opcode for Instruction {
 		}
 
 		/// ____ kkkk kkkk kkkk
+		#[allow(clippy::cast_sign_loss)] // allowed, since we do explicitly use the sign
 		fn k12_opcode(word_offset: WordOffset16) -> u16 {
 			if word_offset.0 < 0 {
 				(((!word_offset.0.unsigned_abs()) & 0x7ff) + 1) | 0x0800
