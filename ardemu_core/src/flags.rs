@@ -284,9 +284,9 @@ impl FlagType {
 }
 impl AsmOperand for FlagType {
 	fn parse_operand(operand: &str) -> Result<Self, AsmParseErrorType> {
-		let flag_num = operand
-			.parse::<u8>()
-			.map_err(|_| AsmParseErrorType::InvalidCpuFlag(operand.to_string()))?;
+		let Ok(flag_num) = operand.parse::<u8>() else {
+			return Err(AsmParseErrorType::InvalidCpuFlag(operand.to_string()));
+		};
 		FlagType::try_from(flag_num)
 			.map_err(|_| AsmParseErrorType::InvalidCpuFlag(operand.to_string()))
 	}

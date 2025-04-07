@@ -39,11 +39,8 @@ pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 				let fields_len = fields.len();
 
 				let parsed_fields = fields.iter().enumerate().map(|(index, field)| {
-					let field_ident = match field.ident.as_ref() {
-						Some(ident) => ident,
-						None => {
-							return quote! { compiler_error!("Field name is required") };
-						}
+					let Some(field_ident) = field.ident.as_ref() else {
+						return quote! { compiler_error!("Field name is required") };
 					};
 					let field_type = &field.ty;
 					quote! {
@@ -53,13 +50,13 @@ pub fn parse_asm_instruction(input: TokenStream) -> TokenStream {
 
 				quote! {
 					#variant_name_upper => {
-						let operands: &[&str; #fields_len] = operands.try_into()
-							.map_err(|_| crate::AsmParseErrorType::InvalidArgumentCount {
+						match TryInto::<&[&str; #fields_len]>::try_into(operands) {
+							Ok(operands) => Ok(#enum_name::#variant_ident { #(#parsed_fields),* }),
+							Err(_) => Err(crate::AsmParseErrorType::InvalidArgumentCount {
 								expected_count: #fields_len,
 								actual_count: operands.len(),
-							})?;
-
-						Ok(#enum_name::#variant_ident { #(#parsed_fields),* })
+							}),
+						}
 					}
 				}
 			}
@@ -106,12 +103,9 @@ pub fn derive_display_instruction(input: TokenStream) -> TokenStream {
 
 	let enum_name = &input.ident;
 
-	let variants = match &input.data {
-		Data::Enum(DataEnum { variants, .. }) => variants,
-		_ => {
-			return quote! { compile_error!("DisplayInstruction can only be derived for enums") }
-				.into();
-		}
+	let Data::Enum(DataEnum { variants, .. }) = &input.data else {
+		return quote! { compile_error!("DisplayInstruction can only be derived for enums") }
+			.into();
 	};
 
 	let arms = variants.iter().map(|variant| {
@@ -121,18 +115,16 @@ pub fn derive_display_instruction(input: TokenStream) -> TokenStream {
 				continue;
 			}
 
-			let lit: syn::LitStr = match attr.parse_args() {
-				Ok(lit) => lit,
+			match attr
+				.parse_args::<syn::LitStr>()
+				.and_then(|lit| syn::parse_str(&lit.value()))
+			{
+				Ok(path) => {
+					overriden_display_function_path = Some(path);
+					break;
+				}
 				Err(e) => return e.to_compile_error(),
 			};
-
-			let path: Path = match syn::parse_str(&lit.value()) {
-				Ok(path) => path,
-				Err(e) => return e.to_compile_error(),
-			};
-
-			overriden_display_function_path = Some(path);
-			break;
 		}
 
 		let variant_ident = &variant.ident;

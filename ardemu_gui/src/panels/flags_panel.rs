@@ -46,11 +46,10 @@ impl FlagsPanel {
 					.into()
 				}))
 				.spacing(10)
-				.padding(10) //.width(Fill)
+				.padding(10)
 			))
 			.style(panel_style)
 		]
-		//.width(Fill)
 		.spacing(5)
 		.into()
 	}
