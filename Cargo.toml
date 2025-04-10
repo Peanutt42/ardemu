@@ -15,8 +15,8 @@ members = [
 [workspace.dependencies]
 thiserror = { version = "2.0" }
 self-rust-tokenize = "0.4.0"
-quote = { version = "1.0.38" }
-syn = { version = "2.0.98", features = ["full"] }
+quote = "1.0.40"
+syn = { version = "2.0.100", features = ["full"] }
 proc-macro2 = "1.0"
 
 [dependencies]

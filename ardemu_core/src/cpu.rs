@@ -56,16 +56,6 @@ impl Cpu {
 		}
 	}
 
-	/// resets everything except the last loaded program
-	pub fn reset(&mut self) {
-		self.registers = [0; Register::COUNT];
-		self.program_counter = WordAddress(0);
-		self.stack_pointer = Self::STACK_START_ADDRESS;
-		self.cycle = 0;
-		self.sram = [0u8; Self::SRAM_SIZE];
-		self.breakpoints.clear();
-	}
-
 	pub fn add_breakpoint(&mut self, address: WordAddress) {
 		self.breakpoints.insert(address);
 	}
