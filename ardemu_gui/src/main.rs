@@ -11,13 +11,13 @@ use iced::window::settings::PlatformSpecific;
 use iced::{
 	alignment::Vertical,
 	border::rounded,
-	keyboard,
+	event, keyboard,
 	widget::{
 		button, checkbox, column, container, pick_list, responsive, row, scrollable, text, tooltip,
 		tooltip::Position, Space,
 	},
 	window::{self, icon},
-	Element, Font,
+	Element, Event, Font,
 	Length::{Fill, FillPortion},
 	Subscription, Task, Theme,
 };
@@ -89,6 +89,8 @@ enum ProgramState {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone)]
 enum Message {
+	/// used to fix the window not updating after clicking on a referenced symbol
+	Empty,
 	SetArduinoCliPath(PathBuf),
 	ResetCpu,
 	SimulateCpu(bool),
@@ -195,7 +197,20 @@ impl App {
 			_ => None,
 		});
 
-		Subscription::batch([update_cpu_sim_subscription, keyboard_shortcuts])
+		// used to update window after clicking on a referenced symbol
+		let update_window_on_mouse_click = event::listen_with(|event, _status, _window_id| {
+			if let Event::Mouse(_) = event {
+				Some(Message::Empty)
+			} else {
+				None
+			}
+		});
+
+		Subscription::batch([
+			update_cpu_sim_subscription,
+			keyboard_shortcuts,
+			update_window_on_mouse_click,
+		])
 	}
 
 	fn theme(&self) -> Theme {
@@ -213,6 +228,7 @@ impl App {
 
 	fn update(&mut self, message: Message) -> Task<Message> {
 		match message {
+			Message::Empty => Task::none(),
 			Message::SetArduinoCliPath(filepath) => {
 				self.settings.arduino_cli_filepath = Some(filepath);
 				self.settings.save();
