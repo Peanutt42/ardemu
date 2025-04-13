@@ -1,4 +1,6 @@
-use ardemu_core::{Cpu, Opcode, PointerRegister, Program, WordAddress};
+use std::fmt::Write;
+
+use ardemu_core::{Cpu, Instruction, Opcode, PointerRegister, Program, WordAddress};
 use iced::{
 	alignment::Vertical,
 	widget::{
@@ -117,6 +119,8 @@ impl InstructionsPanel {
 	}
 
 	pub fn view<'a>(&'a self, app: &'a App) -> Element<'a, Message> {
+		const OPCODE_WIDTH: f32 = 120.0;
+
 		let cpu_sim = app.cpu_sim.peek_output_buffer();
 		let cpu = &cpu_sim.cpu;
 		let program_counter = cpu.get_program_counter();
@@ -200,6 +204,32 @@ impl InstructionsPanel {
 							);
 						}
 
+						let opcode_view: Element<Message> = {
+							let first_opcode = program.flash[program_address.0 as usize];
+							let is_32bit = instruction
+								.as_ref()
+								.map(Instruction::is_32bit)
+								.unwrap_or(false);
+							let hex_opcode = if is_32bit {
+								let second_opcode = program.flash[program_address.0 as usize + 1];
+								format!(
+									"{}{}",
+									format_opcode(first_opcode),
+									format_opcode(second_opcode)
+								)
+							} else {
+								format_opcode(first_opcode)
+							};
+
+							container(
+								text(hex_opcode)
+									.width(OPCODE_WIDTH)
+									.style(secondary_text_style),
+							)
+							.padding(Padding::default().left(15.0).right(10.0))
+							.into()
+						};
+
 						let instruction_view: Element<Message> = mouse_area(
 							row![
 								match self.hovered_program_address {
@@ -253,6 +283,7 @@ impl InstructionsPanel {
 								} else {
 									Message::AddBreakpoint(program_address)
 								},),
+								opcode_view,
 								row![match instruction {
 									Some(instruction) => text!("{instruction}").color_maybe(
 										if instr_currently_executing {
@@ -338,4 +369,16 @@ impl InstructionsPanel {
 		.spacing(5)
 		.into()
 	}
+}
+
+fn format_opcode(opcode: u16) -> String {
+	format!("{:04x}", opcode)
+		.chars()
+		.collect::<Vec<char>>()
+		.chunks(2)
+		.rev()
+		.fold(String::new(), |mut result, chunk| {
+			write!(&mut result, "{} ", chunk.iter().collect::<String>()).unwrap();
+			result
+		})
 }
