@@ -3,38 +3,66 @@ use std::collections::HashMap;
 use elf::{
 	abi::{STB_GLOBAL, STB_LOCAL, STB_WEAK, STT_FUNC, STT_NOTYPE, STT_OBJECT},
 	endian::AnyEndian,
+	parse::ParsingTable,
+	section::SectionHeader,
+	string_table::StringTable,
 	ElfBytes,
 };
 
 use crate::{LoadElfError, Program, WordAddress};
 
-/// returns (section_header_index, instructions)
-fn load_instructions(elf: &ElfBytes<AnyEndian>) -> Result<(usize, Vec<u16>), LoadElfError> {
-	match elf.section_headers_with_strtab()? {
-		(Some(shdrs), Some(strtab)) => {
-			for (section_index, section) in shdrs.iter().enumerate() {
-				if let Ok(section_name) = strtab.get(section.sh_name as usize) {
-					if section_name == ".text" {
-						if section.sh_addr != 0 {
-							return Err(LoadElfError::NonZeroBaseCodeAddress);
-						}
-
-						return match elf.section_data(&section) {
-							Ok((flash_binary, None)) => {
-								Ok((section_index, Program::load_flash_binary(flash_binary)?))
-							}
-							Ok((_code, Some(_compression_header))) => {
-								Err(LoadElfError::CompressedNotSupported)
-							}
-							Err(_) => Err(LoadElfError::CouldNotFindCodeSection),
-						};
-					}
-				}
+fn find_section(
+	name: &'static str,
+	shdrs: &ParsingTable<AnyEndian, SectionHeader>,
+	strtab: &StringTable,
+) -> Option<(usize, SectionHeader)> {
+	for (section_index, section) in shdrs.iter().enumerate() {
+		if let Ok(section_name) = strtab.get(section.sh_name as usize) {
+			if section_name == name {
+				return Some((section_index, section));
 			}
-			Err(LoadElfError::CouldNotFindCodeSection)
 		}
-		_ => Err(LoadElfError::CouldNotFindCodeSection),
 	}
+	None
+}
+
+/// returns (code_section_header_index, instructions)
+fn load_instructions(elf: &ElfBytes<AnyEndian>) -> Result<(usize, Vec<u16>), LoadElfError> {
+	let (Some(shdrs), Some(strtab)) = elf.section_headers_with_strtab()? else {
+		return Err(LoadElfError::CouldNotFindCodeSection);
+	};
+
+	let Some((code_section_header_index, code_section)) = find_section(".text", &shdrs, &strtab)
+	else {
+		return Err(LoadElfError::CouldNotFindCodeSection);
+	};
+
+	if code_section.sh_addr != 0 {
+		return Err(LoadElfError::NonZeroBaseCodeAddress);
+	}
+
+	let (flash_code_binary, flash_code_compression) = elf
+		.section_data(&code_section)
+		.map_err(|_| LoadElfError::CouldNotFindCodeSection)?;
+
+	if flash_code_compression.is_some() {
+		return Err(LoadElfError::CompressedNotSupported);
+	}
+
+	let mut flash = flash_code_binary.to_vec();
+
+	if let Some((_index, data_section)) = find_section(".data", &shdrs, &strtab) {
+		if let Ok((flash_data_binary, None)) = elf.section_data(&data_section) {
+			if !flash_data_binary.is_empty() {
+				flash.append(&mut flash_data_binary.to_vec());
+			}
+		}
+	}
+
+	Ok((
+		code_section_header_index,
+		Program::load_flash_binary(&flash)?,
+	))
 }
 
 fn load_debug_symbol_table(
