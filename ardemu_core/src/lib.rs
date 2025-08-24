@@ -16,8 +16,7 @@
 #![deny(clippy::serde_api_misuse)]
 #![deny(clippy::uninit_vec)]
 #![deny(unsafe_code)]
-#![deny(clippy::transmute_int_to_char)]
-#![deny(clippy::transmute_int_to_float)]
+#![deny(unnecessary_transmutes)]
 #![deny(clippy::transmute_ptr_to_ref)]
 #![deny(clippy::transmute_undefined_repr)]
 

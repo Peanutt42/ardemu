@@ -1,24 +1,24 @@
 [package]
 name = "ardemu"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [workspace]
 members = [
-	"ardemu_core",
-	"ardemu_gui",
-	"ardemu_web",
-	"ardemu_macros/ardemu_assemble_macro",
-	"ardemu_macros/ardemu_instruction_helper_macro",
+  "ardemu_core",
+  "ardemu_gui",
+  "ardemu_macros/ardemu_assemble_macro",
+  "ardemu_macros/ardemu_instruction_helper_macro",
+  "ardemu_web",
 ]
 
 [workspace.dependencies]
-thiserror = { version = "2.0" }
-self-rust-tokenize = "0.4.0"
-quote = "1.0.40"
-syn = { version = "2.0.100", features = ["full"] }
 proc-macro2 = "1.0"
+quote = "1.0.40"
+self-rust-tokenize = "0.4.0"
+syn = { version = "2.0.100", features = ["full"] }
+thiserror = { version = "2.0" }
 
 [dependencies]
-ardemu_core = { path = "ardemu_core" }
 ardemu_assemble_macro = { path = "ardemu_macros/ardemu_assemble_macro" }
+ardemu_core = { path = "ardemu_core" }

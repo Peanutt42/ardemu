@@ -5,12 +5,12 @@ edition = "2021"
 
 [dependencies]
 ardemu_instruction_helper_macro = { path = "../ardemu_macros/ardemu_instruction_helper_macro" }
-thiserror = { workspace = true }
-self-rust-tokenize = { workspace = true }
-num_enum = "0.7.3"
+elf = "0.8.0"
 ihex = "3.0.0"
-elf = "0.7.4"
+num_enum = "0.7.3"
 num-traits = "0.2.19"
+self-rust-tokenize = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 ardemu_assemble_macro = { path = "../ardemu_macros/ardemu_assemble_macro" }

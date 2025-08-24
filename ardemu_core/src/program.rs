@@ -88,7 +88,7 @@ impl Program {
 		Instruction::load(opcode_32bit)
 	}
 
-	pub fn iter(&self) -> ProgramIter {
+	pub fn iter(&self) -> ProgramIter<'_> {
 		ProgramIter {
 			program: self,
 			program_address: WordAddress(0),

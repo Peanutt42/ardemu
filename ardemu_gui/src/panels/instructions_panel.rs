@@ -378,7 +378,7 @@ fn format_opcode(opcode: u16) -> String {
 		.chunks(2)
 		.rev()
 		.fold(String::new(), |mut result, chunk| {
-			write!(&mut result, "{} ", chunk.iter().collect::<String>()).unwrap();
+			let _ = write!(&mut result, "{} ", chunk.iter().collect::<String>());
 			result
 		})
 }

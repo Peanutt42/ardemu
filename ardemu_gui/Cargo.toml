@@ -5,25 +5,25 @@ edition = "2021"
 
 [dependencies]
 ardemu_core = { path = "../ardemu_core" }
-triple_buffer = "8.1.0"
-syntect = { version = "5.2.0", features = ["yaml-load"] }
-iced = { version = "0.13.1", features = [
-	"tokio",
-	"lazy",
-	"advanced",
-	"svg",
-	"highlighter",
-	"image",
-] }
-image = "=0.24.9"
-iced_aw = { version = "0.12", default-features = false, features = ["spinner"] }
-tokio = { version = "1.44.2", features = [
-	"rt-multi-thread",
-	"fs",
-	"process",
-	"io-util",
-] }
-serde = { version = "1.0", features = ["derive"] }
-rfd = "0.15.3"
 directories = "6.0"
-toml = "0.8.20"
+iced = { version = "0.13.1", features = [
+  "advanced",
+  "highlighter",
+  "image",
+  "lazy",
+  "svg",
+  "tokio",
+] }
+iced_aw = { version = "0.12", default-features = false, features = ["spinner"] }
+image = "=0.24.9"
+rfd = "0.15.3"
+serde = { version = "1.0", features = ["derive"] }
+syntect = { version = "5.2.0", features = ["yaml-load"] }
+tokio = { version = "1.44.2", features = [
+  "fs",
+  "io-util",
+  "process",
+  "rt-multi-thread",
+] }
+toml = "0.9.5"
+triple_buffer = "8.1.0"

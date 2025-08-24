@@ -344,7 +344,7 @@ impl App {
 		}
 	}
 
-	fn view(&self) -> Element<Message> {
+	fn view(&self) -> Element<'_, Message> {
 		let cpu_sim = self.cpu_sim.peek_output_buffer();
 
 		container(responsive(move |size| {
@@ -377,7 +377,7 @@ impl App {
 		.into()
 	}
 
-	fn program_panels(&self, portrait: bool) -> Element<Message> {
+	fn program_panels(&self, portrait: bool) -> Element<'_, Message> {
 		let instructions_panel_view = self.instructions_panel.view(self);
 
 		match self.program_source.view(&self.settings) {
@@ -438,7 +438,7 @@ impl App {
 		}
 	}
 
-	fn simulation_controls(&self, cpu_sim: &CpuSim) -> Element<Message> {
+	fn simulation_controls(&self, cpu_sim: &CpuSim) -> Element<'_, Message> {
 		row![
 			button(if self.simulate_cpu {
 				"Stop (F5)"
@@ -489,7 +489,7 @@ impl App {
 		.into()
 	}
 
-	fn simulation_panel(&self, portrait: bool) -> Element<Message> {
+	fn simulation_panel(&self, portrait: bool) -> Element<'_, Message> {
 		let arduino_board_panel = self.arduino_board_panel.view(self);
 		let register_panel = self.registers_panel.view(self);
 		let flags_panel = self.flags_panel.view(self);
