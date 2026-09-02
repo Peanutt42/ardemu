@@ -51,13 +51,8 @@ pub fn unindent_text(text: &mut Content) {
 	let tab_column = text.line(line).and_then(|line| {
 		line.split_at_checked(column)
 			.and_then(|(line, _right_line)| {
-				line.rfind("    ").and_then(|tab_column| {
-					if tab_column <= column {
-						Some(tab_column)
-					} else {
-						None
-					}
-				})
+				line.rfind("    ")
+					.filter(|&tab_column| tab_column <= column)
 			})
 	});
 

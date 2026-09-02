@@ -48,7 +48,7 @@ impl Program {
 
 	/// loads flash (u16's) from binary (u8's)
 	pub fn load_flash_binary(code: &[u8]) -> Result<Vec<u16>, LoadProgramError> {
-		if code.len() % 2 != 0 {
+		if !code.len().is_multiple_of(2) {
 			return Err(LoadProgramError::InvalidAlignment);
 		}
 
