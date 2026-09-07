@@ -9,7 +9,16 @@ members = [
   "ardemu_gui",
   "ardemu_macros/ardemu_assemble_macro",
   "ardemu_macros/ardemu_instruction_helper_macro",
-  "ardemu_web",
+]
+# ardemu_gui builds for native (desktop wgpu) by default, and for the browser
+# (wasm, wgpu via WebGL2) with `trunk serve`/`trunk build`. Exclude the root
+# workspaces that are native-only/web-only as needed.
+default-members = [
+  ".",
+  "ardemu_core",
+  "ardemu_gui",
+  "ardemu_macros/ardemu_assemble_macro",
+  "ardemu_macros/ardemu_instruction_helper_macro",
 ]
 
 [workspace.dependencies]

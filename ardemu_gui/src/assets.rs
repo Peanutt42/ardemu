@@ -15,6 +15,7 @@ pub static ARDUINO_UNO_LED_POWER_ON_SVG: LazyLock<svg::Handle> = LazyLock::new(|
 	svg::Handle::from_memory(include_bytes!("../assets/ArduinoUno_LED_POWER_ON.svg"))
 });
 
+#[cfg(not(target_arch = "wasm32"))]
 pub static APP_ICON_PNG_BYTES: &[u8] = include_bytes!("../assets/icon.png");
 
 pub static JETBRAINS_MONO_FONT: Font = Font {

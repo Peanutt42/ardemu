@@ -47,6 +47,9 @@
               vulkan-headers
               vulkan-validation-layers
               vulkan-tools
+
+              # for iced_comet debugger
+              openssl.dev
             ]
             ++ runtimeLibs;
 

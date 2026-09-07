@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arduino Emulator</title>
+    <link data-trunk rel="icon" href="assets/favicon.ico" />
+    <base data-trunk-public-url />
+    <style>
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: #111111;
+        color: #ffffff;
+        font-family: sans-serif;
+        z-index: 1000;
+      }
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      #loading.hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100svh;
+      background: #111111;
+    "
+  >
+    <div id="loading">
+      <div class="spinner"></div>
+      <div>Loading WASM...</div>
+    </div>
+
+    <link
+      data-trunk
+      rel="rust"
+      href="Cargo.toml"
+      data-wasm-opt="z"
+      data-bin="ardemu_gui"
+    />
+  </body>
+</html>

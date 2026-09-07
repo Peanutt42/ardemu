@@ -1,5 +1,5 @@
 use ardemu_core::{
-	Imm8,
+	Cpu, Imm8,
 	Register::{self, R9},
 };
 use iced::{
@@ -29,31 +29,51 @@ impl RegistersPanel {
 			None => Vec::new(),
 		};
 
+		let first_half_registors = Register::ALL.iter().take(Register::COUNT / 2);
+		let second_half_registors = Register::ALL.iter().skip(Register::COUNT / 2);
+
 		column![
 			text("Registers:"),
-			container(scrollable(
-				Column::with_children(Register::ALL.iter().map(|reg| {
-					let referenced = referenced_registers.contains(reg);
-					let value = Imm8(cpu.read_register(*reg));
-					let padding_space = if *reg <= R9 { " " } else { "" };
-
-					row![
-						text!("{reg}: {padding_space}").style(if referenced {
-							primary_text_style
-						} else {
-							secondary_text_style
-						}),
-						text!("{value}")
-					]
-					.align_y(Vertical::Center)
-					.into()
-				}))
-				.spacing(10)
+			container(scrollable(row![
+				Column::with_children(first_half_registors.map(|reg| Self::register_view(
+					cpu,
+					&referenced_registers,
+					*reg
+				)))
+				.spacing(5)
+				.padding(Padding::new(10.0).right(20)),
+				Column::with_children(second_half_registors.map(|reg| Self::register_view(
+					cpu,
+					&referenced_registers,
+					*reg
+				)))
+				.spacing(5)
 				.padding(Padding::new(10.0).right(20))
-			))
+			]))
 			.style(panel_style)
 		]
 		.spacing(5)
+		.into()
+	}
+
+	fn register_view<'a>(
+		cpu: &'a Cpu,
+		referenced_registers: &[Register],
+		register: Register,
+	) -> iced::Element<'a, Message> {
+		let referenced = referenced_registers.contains(&register);
+		let value = Imm8(cpu.read_register(register));
+		let padding_space = if register <= R9 { " " } else { "" };
+
+		row![
+			text!("{padding_space}{register}: ").style(if referenced {
+				primary_text_style
+			} else {
+				secondary_text_style
+			}),
+			text!("{value}")
+		]
+		.align_y(Vertical::Center)
 		.into()
 	}
 }

@@ -115,6 +115,7 @@ impl MemoryPanel {
 						.on_submit(MemoryPanelMessage::ChangeStartAddressFromInput.into()),
 					]
 					.width(250.0)
+					.padding(10)
 					.align_y(Vertical::Center),
 					row![
 						container(Column::with_children((-1..num_rows as i16).map(|index| {
@@ -234,7 +235,6 @@ impl MemoryPanel {
 							scrollable::Scrollbar::new()
 						))
 					]
-					.padding(10)
 				]
 				.into()
 			}))

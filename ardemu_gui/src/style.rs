@@ -2,7 +2,7 @@ use iced::{
 	border::rounded,
 	overlay::menu,
 	widget::{button, container, pick_list, text, text_editor},
-	Border, Color, Theme,
+	Border, Color, Shadow, Theme,
 };
 
 pub fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
@@ -15,7 +15,6 @@ pub fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_edi
 			width: 0.0,
 			color: palette.background.strong.color,
 		},
-		icon: palette.background.weak.text,
 		placeholder: palette.background.strong.color,
 		value: palette.background.base.text,
 		selection: palette.primary.weak.color,
@@ -30,7 +29,7 @@ pub fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_edi
 			},
 			..active
 		},
-		text_editor::Status::Focused => text_editor::Style {
+		text_editor::Status::Focused { .. } => text_editor::Style {
 			border: Border {
 				color: palette.primary.strong.color,
 				..active.border
@@ -47,9 +46,9 @@ pub fn text_editor_style(theme: &Theme, status: text_editor::Status) -> text_edi
 
 pub fn button_style(theme: &Theme, status: button::Status) -> button::Style {
 	let color_pair = match status {
-		button::Status::Active => theme.extended_palette().primary.strong,
+		button::Status::Active => theme.extended_palette().primary.weak,
 		button::Status::Hovered | button::Status::Pressed | button::Status::Disabled => {
-			theme.extended_palette().primary.weak
+			theme.extended_palette().primary.base
 		}
 	};
 
@@ -117,7 +116,7 @@ pub fn pick_list_style(theme: &Theme, status: pick_list::Status) -> pick_list::S
 		pick_list::Status::Active | pick_list::Status::Hovered => {
 			theme.extended_palette().background.weak
 		}
-		pick_list::Status::Opened => theme.extended_palette().background.strong,
+		pick_list::Status::Opened { .. } => theme.extended_palette().background.strong,
 	};
 
 	pick_list::Style {
@@ -136,5 +135,6 @@ pub fn pick_list_menu_style(theme: &Theme) -> menu::Style {
 		text_color: theme.extended_palette().background.base.text,
 		selected_text_color: theme.extended_palette().primary.strong.text,
 		selected_background: theme.extended_palette().primary.strong.color.into(),
+		shadow: Shadow::default(),
 	}
 }

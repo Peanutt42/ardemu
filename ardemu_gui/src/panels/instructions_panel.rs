@@ -5,7 +5,7 @@ use iced::{
 	alignment::Vertical,
 	widget::{
 		button, checkbox, column, container, mouse_area, rich_text, row, scrollable,
-		scrollable::Direction, svg, text, text::Span, tooltip, tooltip::Position, Column, Space,
+		scrollable::Direction, space, svg, text, text::Span, tooltip, tooltip::Position, Column,
 	},
 	Color, Element,
 	Length::Fill,
@@ -76,9 +76,9 @@ impl InstructionsPanel {
 	}
 
 	fn scroll_to_instruction(&self, instruction_index: usize) -> Task<Message> {
-		scrollable::scroll_to(
+		iced::widget::operation::scroll_to(
 			INSTRUCTION_SCROLLABLE_ID.clone(),
-			scrollable::AbsoluteOffset {
+			iced::widget::operation::AbsoluteOffset {
 				x: 0.0,
 				y: INSTRUCTION_SCROLLABLE_PADDING + INSTRUCTION_HEIGHT * instruction_index as f32,
 			},
@@ -150,12 +150,15 @@ impl InstructionsPanel {
 						" (compile to reflect changes!)"
 					}
 				),
-				Space::new(Fill, 0.0),
-				checkbox("Stick", self.stick_to_current_instruction).on_toggle(|stick| {
-					InstructionsPanelMessage::SetStickToCurrentInstruction(stick).into()
-				})
+				space().width(Fill).height(1.0),
+				checkbox(self.stick_to_current_instruction)
+					.label("Stick")
+					.on_toggle(|stick| {
+						InstructionsPanelMessage::SetStickToCurrentInstruction(stick).into()
+					})
 			]
-			.align_y(Vertical::Center),
+			.align_y(Vertical::Center)
+			.width(Fill),
 			container(match &app.program {
 				ProgramState::Compiled(program) => {
 					let mut instructions: Vec<Element<Message>> = Vec::with_capacity(program.len());
@@ -191,7 +194,7 @@ impl InstructionsPanel {
 						if let Some(debug_symbol) = program.get_debug_symbol(program_address) {
 							instructions.push(
 								column![
-									Space::new(0.0, INSTRUCTION_HEIGHT),
+									space().width(1.0).height(INSTRUCTION_HEIGHT),
 									text!("{debug_symbol}:").height(INSTRUCTION_HEIGHT).style(
 										move |theme: &Theme| if is_currently_referenced {
 											primary_text_style(theme)
@@ -230,6 +233,34 @@ impl InstructionsPanel {
 							.into()
 						};
 
+						let mut instruction_text_row = row![match instruction {
+							Some(instruction) =>
+								text!("{instruction}").color_maybe(if instr_currently_executing {
+									Some(Color::from_rgb(1.0, 0.0, 0.0))
+								} else {
+									None
+								}),
+							None => text("???"),
+						}];
+						if let Some((referenced_program_address, referenced_debug_symbol)) =
+							referenced_debug_symbol.as_ref()
+						{
+							instruction_text_row = instruction_text_row.push(row![
+								text!(" ; {referenced_program_address}: ")
+									.style(secondary_text_style),
+								rich_text![Span::<Message>::new(
+									(*referenced_debug_symbol).clone()
+								)
+								.link(Message::from(
+									InstructionsPanelMessage::GoToInstruction(
+										*referenced_program_address,
+									)
+								))]
+								.on_link_click(std::convert::identity)
+								.style(secondary_text_style)
+							]);
+						}
+
 						let instruction_view: Element<Message> = mouse_area(
 							row![
 								match self.hovered_program_address {
@@ -257,7 +288,7 @@ impl InstructionsPanel {
 										)
 										.into()
 									}
-									_ => Element::new(Space::new(16, 16)),
+									_ => Element::new(space().width(16).height(16)),
 								},
 								button(text!("{program_address}:").style(
 									if is_currently_referenced {
@@ -284,33 +315,7 @@ impl InstructionsPanel {
 									Message::AddBreakpoint(program_address)
 								},),
 								opcode_view,
-								row![match instruction {
-									Some(instruction) => text!("{instruction}").color_maybe(
-										if instr_currently_executing {
-											Some(Color::from_rgb(1.0, 0.0, 0.0))
-										} else {
-											None
-										}
-									),
-									None => text("???"),
-								}]
-								.push_maybe(referenced_debug_symbol.as_ref().map(
-									|(referenced_program_address, referenced_debug_symbol)| {
-										row![
-											text!(" ; {referenced_program_address}: ")
-												.style(secondary_text_style),
-											rich_text![Span::new(
-												(*referenced_debug_symbol).clone()
-											)
-											.link(Message::from(
-												InstructionsPanelMessage::GoToInstruction(
-													*referenced_program_address,
-												)
-											))]
-											.style(secondary_text_style)
-										]
-									},
-								)),
+								instruction_text_row,
 							]
 							.align_y(Vertical::Center)
 							.height(INSTRUCTION_HEIGHT),

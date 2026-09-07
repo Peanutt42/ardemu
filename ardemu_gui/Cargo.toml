@@ -3,27 +3,73 @@ name = "ardemu_gui"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "ardemu_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ardemu_gui"
+path = "src/main.rs"
+
 [dependencies]
 ardemu_core = { path = "../ardemu_core" }
-directories = "6.0"
-iced = { version = "0.13.1", features = [
+# Single iced feature set that compiles for BOTH native (desktop wgpu) and wasm
+# (wgpu rendered via WebGL2). `default-features = false` plus the explicit union
+# below keeps `tiny-skia`/winit backends available natively and enables the
+# `webgl`/`web-colors` paths on wasm.
+iced = { version = "0.14.0", default-features = false, features = [
   "advanced",
+  "crisp",
   "highlighter",
   "image",
   "lazy",
   "svg",
+  "thread-pool",
+  "tiny-skia",
   "tokio",
+  "wayland",
+  "web-colors",
+  "webgl",
+  "wgpu",
+  "x11",
+  "wayland"
 ] }
-iced_aw = { version = "0.12", default-features = false, features = ["spinner"] }
-image = "=0.24.9"
-rfd = "0.15.3"
+iced_aw = { version = "0.14", default-features = false, features = ["spinner"] }
 serde = { version = "1.0", features = ["derive"] }
-syntect = { version = "5.2.0", features = ["yaml-load"] }
+syntect = { version = "5.2.0", default-features = false, features = ["parsing", "yaml-load", "regex-fancy"] }
+toml = "0.9.5"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+directories = "6.0"
+image = "0.25"
+rfd = "0.15.3"
 tokio = { version = "1.44.2", features = [
   "fs",
   "io-util",
   "process",
   "rt-multi-thread",
 ] }
-toml = "0.9.5"
 triple_buffer = "8.1.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+  "Blob",
+  "Document",
+  "Element",
+  "Event",
+  "EventTarget",
+  "File",
+  "FileList",
+  "FileReader",
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "HtmlInputElement",
+  "ProgressEvent",
+  "Window",
+] }
+
+[features]
+debug = ["iced/debug", "iced/time-travel"]

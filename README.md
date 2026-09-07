@@ -8,8 +8,8 @@
 
 (Not affiliated with Arduino!)
 
-Try it out in the browser! (limited gui)
-[peanutt42.github.io/ardemu_web](https://peanutt42.github.io/ardemu_web)
+Try it out in the browser! (uses wasm)
+<https://peternhennig.de/ardmemu_web/>
 
 ![ardemu_gui](ardemu_gui/Screenshot.png)
 
@@ -18,6 +18,21 @@ Try it out in the browser! (limited gui)
 ```bash
 cargo r --release -p ardemu_gui
 ```
+
+#### Run the full iced GUI in the browser:
+
+This builds the same iced `ardemu_gui` application and runs it in the browser (wasm).
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install --locked trunk
+cd ardemu_gui
+trunk serve        # http://localhost:8080
+# production build:
+trunk build        # output in ardemu_gui/dist
+```
+
+Note: For now, arduino sketches dont work in wasm, we would have to port arduino-cli to wasm.
 
 ## Sample: Fibonacci Sequence
 `fib.asm`:
@@ -68,13 +83,6 @@ fn main() {
 }
 ```
 
-### System Installation (GUI)
-system installation not needed to run the gui!
-
-on linux:
-```bash
-./ardemu_gui/scripts/install_linux.sh
-```
 
 ## Resources
 - [Atmel AVR Instruction Manual](https://ww1.microchip.com/downloads/aemDocuments/documents/MCU08/ProductDocuments/ReferenceManuals/AVR-InstructionSet-Manual-DS40002198.pdf): main source of reference material for AVR instruction set and expected behaviour

@@ -21,37 +21,30 @@ impl ArduinoBoardPanel {
 	pub fn view<'a>(&'a self, app: &'a crate::App) -> iced::Element<'a, Message> {
 		let cpu = &app.cpu_sim.peek_output_buffer().cpu;
 
-		container(
-			stack![svg(ARDUINO_UNO_SVG.clone())
-				.width(FillPortion(2))
-				.height(Fill)]
-			.push_maybe(if cpu.is_builtin_led_on() {
-				Some(
-					svg(ARDUINO_UNO_LED_BUILTIN_ON_SVG.clone())
-						.style(|_, _| svg::Style {
-							color: Some(Color::from_rgb(1.0, 1.0, 0.0)),
-						})
-						.width(FillPortion(2))
-						.height(Fill),
-				)
-			} else {
-				None
-			})
-			.push_maybe(if app.simulate_cpu {
-				Some(
-					svg(ARDUINO_UNO_LED_POWER_ON_SVG.clone())
-						.style(|_, _| svg::Style {
-							color: Some(Color::from_rgb(0.0, 1.0, 0.0)),
-						})
-						.width(FillPortion(2))
-						.height(Fill),
-				)
-			} else {
-				None
-			}),
-		)
-		.style(panel_style)
-		.padding(10)
-		.into()
+		let mut board = stack![svg(ARDUINO_UNO_SVG.clone())
+			.width(FillPortion(2))
+			.height(Fill)];
+		if cpu.is_builtin_led_on() {
+			board = board.push(
+				svg(ARDUINO_UNO_LED_BUILTIN_ON_SVG.clone())
+					.style(|_, _| svg::Style {
+						color: Some(Color::from_rgb(1.0, 1.0, 0.0)),
+					})
+					.width(FillPortion(2))
+					.height(Fill),
+			);
+		}
+		if app.simulate_cpu {
+			board = board.push(
+				svg(ARDUINO_UNO_LED_POWER_ON_SVG.clone())
+					.style(|_, _| svg::Style {
+						color: Some(Color::from_rgb(0.0, 1.0, 0.0)),
+					})
+					.width(FillPortion(2))
+					.height(Fill),
+			);
+		}
+
+		container(board).style(panel_style).padding(10).into()
 	}
 }

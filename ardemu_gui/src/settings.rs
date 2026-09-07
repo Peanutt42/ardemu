@@ -1,12 +1,16 @@
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Settings {
+	// arduino-cli is not supported on wasm, so this is never set there
+	#[cfg(not(target_arch = "wasm32"))]
 	pub arduino_cli_filepath: Option<PathBuf>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Settings {
 	const FILENAME: &str = "settings.toml";
 

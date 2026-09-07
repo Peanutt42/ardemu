@@ -245,7 +245,9 @@ pub enum FlagType {
 }
 
 impl FlagType {
-	pub const ALL: &'static [FlagType; 8] = &[
+	pub const COUNT: usize = 8;
+
+	pub const ALL: &'static [FlagType; Self::COUNT] = &[
 		Self::Carry,
 		Self::Zero,
 		Self::Negative,
@@ -293,6 +295,6 @@ impl AsmOperand for FlagType {
 }
 impl Display for FlagType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}({})", self.label(), *self as u8)
+		write!(f, "{}", self.label())
 	}
 }

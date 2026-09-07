@@ -14,7 +14,7 @@ pub fn code_editor_keybindings<Message>(
 		..
 	} = &key_press;
 
-	if *status != Status::Focused {
+	if !matches!(status, Status::Focused { .. }) {
 		return None;
 	}
 
@@ -47,13 +47,14 @@ pub fn code_editor_keybindings<Message>(
 }
 
 pub fn unindent_text(text: &mut Content) {
-	let (line, column) = text.cursor_position();
+	let cursor = text.cursor();
+	let (line, column) = (cursor.position.line, cursor.position.column);
 	let tab_column = text.line(line).and_then(|line| {
-		line.split_at_checked(column)
-			.and_then(|(line, _right_line)| {
-				line.rfind("    ")
-					.filter(|&tab_column| tab_column <= column)
-			})
+		line.text.get(..column).and_then(|left_line| {
+			left_line
+				.rfind("    ")
+				.filter(|&tab_column| tab_column <= column)
+		})
 	});
 
 	if let Some(tab_column) = tab_column {
