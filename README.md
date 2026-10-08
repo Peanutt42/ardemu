@@ -9,7 +9,7 @@
 (Not affiliated with Arduino!)
 
 Try it out in the browser! (uses wasm)
-<https://peternhennig.de/ardmemu_web/>
+<https://peternhennig.de/ardemu_web/>
 
 ![ardemu_gui](ardemu_gui/Screenshot.png)
 

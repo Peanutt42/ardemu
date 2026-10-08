@@ -1,2 +1,3 @@
 /target
 ardemu_gui/dist/
+.direnv
