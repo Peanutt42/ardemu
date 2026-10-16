@@ -14,6 +14,11 @@ Try it out in the browser! (uses wasm)
 ![ardemu_gui](ardemu_gui/Screenshot.png)
 
 
+#### Run GUI with Nix:
+```bash
+nix run git+https://github.com/Peanutt42/ardemu
+```
+
 #### Run GUI with:
 ```bash
 cargo r --release -p ardemu_gui
